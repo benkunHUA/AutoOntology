@@ -1,0 +1,18 @@
+{
+  "name": "@ao/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ao": "./src/index.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ao/api": "workspace:*",
+    "@ao/core": "workspace:*",
+    "@ao/protocol": "workspace:*",
+    "@ao/tools": "workspace:*"
+  }
+}

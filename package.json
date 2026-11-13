@@ -1,0 +1,26 @@
+{
+  "name": "auto-ontology",
+  "private": true,
+  "type": "module",
+  "description": "Node.js coding agent — core agent loop, CLI first",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "cli": "tsx packages/cli/src/index.ts",
+    "cli:mock": "tsx packages/cli/src/index.ts --mock",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}
