@@ -9,3 +9,4 @@ export * from "./selection.ts";
 export * from "./render.ts";
 export * from "./provider.ts";
 export * from "./runtime.ts";
+export * from "./tools.ts";
