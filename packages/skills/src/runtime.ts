@@ -24,6 +24,7 @@ export interface SkillRuntimeOptions {
   catalogBudgetChars?: number;
   omitDescriptions?: boolean;
   disabledPaths?: ReadonlySet<string>;
+  disabledNames?: ReadonlySet<string>;
   providers?: Partial<Record<SkillSourceKind, SkillProvider>>;
 }
 
@@ -65,6 +66,7 @@ export class SkillRuntime {
         roots,
         product,
         disabledPaths: this.options.disabledPaths,
+        disabledNames: this.options.disabledNames,
       });
     if (host instanceof HostSkillProvider) this.hostProvider = host;
 

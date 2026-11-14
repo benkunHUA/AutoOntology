@@ -18,6 +18,7 @@ export interface HostSkillProviderOptions {
   roots: SkillRoot[];
   product?: string;
   disabledPaths?: ReadonlySet<string>;
+  disabledNames?: ReadonlySet<string>;
 }
 
 export class HostSkillProvider implements SkillProvider {
@@ -34,6 +35,7 @@ export class HostSkillProvider implements SkillProvider {
       roots: this.options.roots,
       product: this.options.product,
       disabledPaths: this.options.disabledPaths,
+      disabledNames: this.options.disabledNames,
     });
     return new SkillCatalog(
       outcome.skills.map(hostEntry),

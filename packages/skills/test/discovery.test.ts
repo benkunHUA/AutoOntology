@@ -67,6 +67,20 @@ describe("discoverSkills", () => {
     expect(outcome.warnings.length).toBe(1);
   });
 
+  it("按名称禁用被过滤", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ao-skills-"));
+    await mkdir(join(dir, "keep"), { recursive: true });
+    await mkdir(join(dir, "drop"), { recursive: true });
+    await writeFile(join(dir, "keep", "SKILL.md"), SKILL("keep"), "utf8");
+    await writeFile(join(dir, "drop", "SKILL.md"), SKILL("drop"), "utf8");
+
+    const outcome = await discoverSkills({
+      roots: [{ path: dir, scope: "user" }],
+      disabledNames: new Set(["drop"]),
+    });
+    expect(outcome.skills.map((skill) => skill.name)).toEqual(["keep"]);
+  });
+
   it("按 scope、name 稳定排序", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ao-skills-"));
     for (const [sub, name] of [

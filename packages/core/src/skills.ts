@@ -13,6 +13,7 @@ export interface SkillsOptions {
   catalogBudgetChars?: number;
   omitDescriptions?: boolean;
   disabledPaths?: ReadonlySet<string>;
+  disabledNames?: ReadonlySet<string>;
 }
 
 export function createSkillRuntime(
@@ -25,6 +26,7 @@ export function createSkillRuntime(
     catalogBudgetChars: options.catalogBudgetChars,
     omitDescriptions: options.omitDescriptions,
     disabledPaths: options.disabledPaths,
+    disabledNames: options.disabledNames,
     rootResolver: options.roots
       ? () =>
           options.roots!.map((root) => ({

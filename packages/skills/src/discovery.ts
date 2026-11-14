@@ -75,6 +75,7 @@ export interface DiscoverOptions {
   roots: SkillRoot[];
   product?: string;
   disabledPaths?: ReadonlySet<string>;
+  disabledNames?: ReadonlySet<string>;
 }
 
 export async function discoverSkills(
@@ -84,6 +85,7 @@ export async function discoverSkills(
   const warnings: { path: string; message: string }[] = [];
   const seen = new Set<string>();
   const disabled = await canonicalizePaths(options.disabledPaths);
+  const disabledNames = options.disabledNames ?? new Set<string>();
 
   for (const root of options.roots) {
     const counters: ScanCounters = { dirs: 0, entries: 0, truncated: false };
@@ -93,6 +95,7 @@ export async function discoverSkills(
         if (seen.has(canonical) || disabled.has(canonical)) continue;
         const markdown = await readFile(canonical, "utf8");
         const meta = parseFrontmatter(markdown, basename(dirname(canonical)));
+        if (disabledNames.has(meta.name)) continue;
         const policy = await readAgentPolicy(dirname(canonical));
         if (
           policy.products.length &&
