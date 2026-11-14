@@ -11,6 +11,7 @@ export default defineConfig({
       "@ao/api": src("api"),
       "@ao/core": src("core"),
       "@ao/tools": src("tools"),
+      "@ao/skills": src("skills"),
     },
   },
   test: {

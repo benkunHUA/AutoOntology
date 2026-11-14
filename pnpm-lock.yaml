@@ -208,8 +208,17 @@ importers:
       '@ao/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@ao/skills':
+        specifier: workspace:*
+        version: link:../skills
 
   packages/protocol: {}
+
+  packages/skills:
+    dependencies:
+      '@ao/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/tools:
     dependencies:

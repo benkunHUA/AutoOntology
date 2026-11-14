@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@ao/api": "workspace:*",
-    "@ao/protocol": "workspace:*"
+    "@ao/protocol": "workspace:*",
+    "@ao/skills": "workspace:*"
   }
 }

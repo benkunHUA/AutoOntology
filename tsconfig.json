@@ -19,7 +19,8 @@
       "@ao/protocol": ["packages/protocol/src/index.ts"],
       "@ao/api": ["packages/api/src/index.ts"],
       "@ao/core": ["packages/core/src/index.ts"],
-      "@ao/tools": ["packages/tools/src/index.ts"]
+      "@ao/tools": ["packages/tools/src/index.ts"],
+      "@ao/skills": ["packages/skills/src/index.ts"]
     }
   },
   "include": [
