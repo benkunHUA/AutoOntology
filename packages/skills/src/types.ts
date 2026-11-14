@@ -61,12 +61,12 @@ export interface SkillCatalogEntry {
   remotePluginId?: string;
 }
 
-export interface SkillCatalog {
+export interface SkillCatalogLike {
   readonly entries: SkillCatalogEntry[];
   readonly warnings: string[];
   readonly isPartial: boolean;
   pushEntry(entry: SkillCatalogEntry): void;
-  extend(other: SkillCatalog): this;
+  extend(other: SkillCatalogLike): this;
   visible(): SkillCatalogEntry[];
 }
 
@@ -105,7 +105,7 @@ export interface SkillSearchResult {
 export interface SkillProvider {
   readonly kind: SkillSourceKind;
   usesMcpResources(): boolean;
-  list(query: SkillListQuery): Promise<SkillCatalog>;
+  list(query: SkillListQuery): Promise<SkillCatalogLike>;
   read(request: SkillReadRequest): Promise<SkillReadResult>;
   search(request: SkillSearchRequest): Promise<SkillSearchResult>;
 }
@@ -116,8 +116,8 @@ export interface SkillLoadOutcome {
 }
 
 export interface SkillStepState {
-  hostCatalog: SkillCatalog;
-  catalog: SkillCatalog;
+  hostCatalog: SkillCatalogLike;
+  catalog: SkillCatalogLike;
   toolsEnabled: boolean;
 }
 
