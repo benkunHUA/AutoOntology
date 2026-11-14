@@ -39,9 +39,10 @@ describe("selectExplicitSkills", () => {
   it("文本路径优先，结构化 skill 输入按路径选择", () => {
     const c = catalog(entry("skill:///a", "demo"));
     expect(
-      selectExplicitSkills([{ type: "text", text: "[x](skill:///a)" }], c).map(
-        (e) => e.id,
-      ),
+      selectExplicitSkills(
+        [{ type: "text", text: "[$demo](skill:///a)" }],
+        c,
+      ).map((e) => e.id),
     ).toEqual(["skill:///a"]);
     expect(
       selectExplicitSkills([{ type: "skill", path: "skill:///a" }], c).map(
