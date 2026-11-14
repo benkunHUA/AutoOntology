@@ -1,10 +1,10 @@
 /**
- * 回合执行（对应 run_turn / run_sampling_request）。
+ * 回合执行。
  *
  * 三层循环简化版：
  *   步骤循环（外层 for）→ 重试循环（streamWithRetry）→ 事件循环（内层 for）
  *
- * 是否继续只由三个输入决定（概要设计第 6 节）：
+ * 是否继续只由三个输入决定：
  *   1. 本步有工具调用           → 继续
  *   2. 服务端声明 needsContinue → 继续
  *   3. 有尚未消费的待处理输入    → 继续
@@ -23,14 +23,17 @@ import { captureStepContext } from "./step-context.ts";
 import { ReadWriteGate } from "./tools/gate.ts";
 import type { ToolRouter } from "./tools/router.ts";
 import { ToolOrchestrator } from "./tools/orchestrator.ts";
+import { createSandboxManager } from "./tools/sandbox.ts";
 import { ToolCallRuntime } from "./tools/runtime.ts";
 import { shouldCompact } from "./compaction.ts";
 import { streamWithRetry } from "@ao/api";
 import type {
+  ApprovalGate,
   EventSink,
   FunctionCallItem,
   HistoryItem,
   ModelClient,
+  SandboxManager,
   Usage,
 } from "@ao/protocol";
 import { functionCallOutput, message } from "@ao/protocol";
@@ -44,6 +47,8 @@ export interface RunTurnDeps {
   emit: EventSink;
   hooks?: AgentHooks;
   signal: AbortSignal;
+  approval?: ApprovalGate;
+  sandbox?: SandboxManager;
 }
 
 export interface TurnResult {
@@ -53,7 +58,10 @@ export interface TurnResult {
 
 export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
   const { turn, history, inputQueue, client, router, emit, hooks, signal } = deps;
-  const orchestrator = new ToolOrchestrator();
+  const orchestrator = new ToolOrchestrator({
+    approval: deps.approval,
+    sandbox: deps.sandbox ?? createSandboxManager(),
+  });
   const gate = new ReadWriteGate();
 
   let usage: Usage = { inputTokens: 0, outputTokens: 0 };
@@ -74,10 +82,10 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       history.append(message("user", reviewed));
     }
 
-    // ── 开火前压缩体检（I6：压缩先于新输入落账，骨架只做判定告警） ──
+    // ── 开火前压缩体检：压缩先于新输入落账，目前只做判定告警 ──
     if (shouldCompact(history)) {
       console.warn(
-        `[core] context ~${history.estimateTokens()} tokens, compaction pending (M2)`,
+        `[core] context ~${history.estimateTokens()} tokens, compaction pending`,
       );
     }
 
@@ -154,7 +162,7 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       }
     }
 
-    // ── 流结束：等在途工具，按调用顺序串行回填（I4） ────────────────
+    // ── 流结束：等在途工具，按调用顺序串行回填 ────────────────
     const collected = await runtime.collect();
     for (const { call, result } of collected) {
       history.append(functionCallOutput(call.callId, result.output, result.ok));

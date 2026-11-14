@@ -11,7 +11,7 @@ import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { MockModelClient, ResponsesClient } from "@ao/api";
 import { JsonlPersistence, Session } from "@ao/core";
-import type { ModelClient } from "@ao/protocol";
+import type { ApprovalGate, ModelClient } from "@ao/protocol";
 import { defaultTools } from "@ao/tools";
 import { createRenderer } from "./render.ts";
 
@@ -32,12 +32,14 @@ async function main(): Promise<void> {
     : createResponsesClient();
 
   const renderer = createRenderer();
+  const approval: ApprovalGate = createApprovalGate(useMock);
   const session = new Session({
     cwd,
     model: useMock ? "mock" : (process.env.AO_MODEL ?? "gpt-5-codex"),
     instructions: SYSTEM_INSTRUCTIONS,
     client,
     handlers: defaultTools(),
+    approval,
     emit: (event) => renderer.render(event),
     persistence: new JsonlPersistence(
       resolve(cwd, ".ao", "sessions", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`),
@@ -86,6 +88,17 @@ async function main(): Promise<void> {
   await new Promise((r) => setTimeout(r, 50)); // 等渲染器 flush
   process.stdout.write(`\n会话历史已保存到 ${cwd}/.ao/sessions/\n`);
   process.exit(0);
+}
+
+function createApprovalGate(useMock: boolean): ApprovalGate {
+  const mode = process.env.AO_APPROVAL ?? (useMock ? "auto" : "deny");
+  return {
+    async request(request) {
+      process.stderr.write(`[approval] ${request.action}\n`);
+      if (request.requiresHuman) return false;
+      return mode === "auto";
+    },
+  };
 }
 
 function createResponsesClient(): ResponsesClient {

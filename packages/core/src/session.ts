@@ -1,17 +1,19 @@
 /**
- * 会话（对应 Session + submission_loop）。
+ * 会话。
  *
- * 唯一串行入口（G1 / I1）：submit() 内部没有任何 await，判断与状态变更
+ * 唯一串行入口：submit() 内部没有任何 await，判断与状态变更
  * 在一个同步段内完成；回合本身作为后台 promise 运行。任何时刻同一会话
  * 最多一个活跃任务，新输入要么插话进队列，要么被拒绝，要么在空闲时开新单。
  *
- * 终止统一路径（收工七步的简化版）：
+ * 终止统一路径：
  *   判结局 → 取剩余输入 → 补中断标记/缺失工具结果 → 落盘 → 发终止事件
  *   → 清空活跃任务 → 有待处理输入则立即开下一单
  */
 import type {
+  ApprovalGate,
   EventSink,
   ModelClient,
+  SandboxManager,
   SessionEvent,
   ToolHandler,
 } from "@ao/protocol";
@@ -40,6 +42,8 @@ export interface SessionOptions {
   emit: EventSink;
   hooks?: AgentHooks;
   persistence?: JsonlPersistence;
+  approval?: ApprovalGate;
+  sandbox?: SandboxManager;
 }
 
 interface TurnStats {
@@ -56,7 +60,7 @@ interface ActiveTurn {
   stats: TurnStats;
 }
 
-/** 取消第二档：给正常收手留 100ms（详细设计 5.3）。 */
+/** 取消第二档：给正常收手留 100ms。 */
 const GRACE_MS = 100;
 
 export class Session {
@@ -157,6 +161,8 @@ export class Session {
         emit: (event) => this.emitForTurn(event, active),
         hooks: this.options.hooks,
         signal: active.controller.signal,
+        approval: this.options.approval,
+        sandbox: this.options.sandbox,
       });
       this.pendingResult = result;
     } catch (error) {
@@ -181,14 +187,14 @@ export class Session {
     if (aborted) outcome = "aborted";
     else if (error) outcome = "error";
 
-    // 2. 中断/出错时先回填缺失的工具结果（I3）：function_call 后必须紧跟 output。
+    // 2. 中断/出错时先回填缺失的工具结果：function_call 后必须紧跟 output。
     if (outcome === "aborted") {
       this.history.backfillMissingToolOutputs("turn aborted");
     } else if (outcome === "error") {
       this.history.backfillMissingToolOutputs("turn errored");
     }
 
-    // 3. 剩余输入与中断标记在回填之后落账（I8），不能夹在 call 与 output 之间。
+    // 3. 剩余输入与中断标记在回填之后落账，不能夹在 call 与 output 之间。
     const remaining = this.inputQueue.drain();
     for (const pending of remaining) {
       this.history.append(message("user", pending.text));
@@ -214,7 +220,7 @@ export class Session {
       });
     }
 
-    // 4. 先落盘，再发终止事件（I7）
+    // 4. 先落盘，再发终止事件
     await this.options.persistence?.flush();
 
     if (outcome === "completed") {

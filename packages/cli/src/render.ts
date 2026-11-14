@@ -35,7 +35,7 @@ export function createRenderer(): {
           break;
 
         case "reasoning_delta":
-          // 骨架阶段不渲染推理增量（M2 加 --verbose 开关）
+          // 暂不渲染推理增量
           break;
 
         case "tool_started":
@@ -49,6 +49,15 @@ export function createRenderer(): {
           process.stdout.write(
             DIM(
               `  ${event.ok ? "✓" : "✗"} ${event.name} (${event.durationMs}ms) ` +
+                `${truncate(event.output.split("\n")[0] ?? "", 100)}`,
+            ) + "\n",
+          );
+          break;
+
+        case "tool_aborted":
+          process.stdout.write(
+            DIM(
+              `  ✗ ${event.name} aborted (${event.durationMs}ms) ` +
                 `${truncate(event.output.split("\n")[0] ?? "", 100)}`,
             ) + "\n",
           );
