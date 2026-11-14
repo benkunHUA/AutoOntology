@@ -37,7 +37,7 @@ describe("createSkillTools", () => {
     await runtime.prepareStep({ cwd: "/tmp" });
     const tools = createSkillTools(runtime);
     const list = tools.find((tool) => tool.spec.name === "skills.list")!;
-    const result = await list.execute({ authority: "host" }, ctx());
+    const result = await list.execute({}, ctx());
     expect(result.ok).toBe(true);
     const page = JSON.parse(result.output);
     expect(page.skills.length).toBe(20);
@@ -63,7 +63,7 @@ describe("createSkillTools", () => {
     const runtime = await runtimeWith(0);
     const tools = createSkillTools(runtime);
     const list = tools.find((tool) => tool.spec.name === "skills.list")!;
-    const result = await list.execute({ authority: "host" }, ctx());
+    const result = await list.execute({}, ctx());
     expect(result.ok).toBe(false);
   });
 });

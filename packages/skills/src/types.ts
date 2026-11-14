@@ -1,5 +1,5 @@
 export type SkillScope = "repo" | "user" | "system" | "admin";
-export type SkillSourceKind = "host" | "executor" | "cloud" | "custom";
+export type SkillSourceKind = "host";
 
 export interface SkillMetadata {
   name: string;
@@ -76,12 +76,6 @@ export interface SkillRoot {
   pluginId?: string;
 }
 
-export interface SkillListQuery {
-  turnId?: string;
-  includeCloudSkills?: boolean;
-  executorRoots?: string[];
-}
-
 export interface SkillReadRequest {
   entry: SkillCatalogEntry;
   resource: string;
@@ -94,31 +88,13 @@ export interface SkillReadResult {
   nextCursor: string | null;
 }
 
-export interface SkillSearchRequest {
-  query: string;
-}
-
-export interface SkillSearchResult {
-  results: SkillCatalogEntry[];
-}
-
-export interface SkillProvider {
-  readonly kind: SkillSourceKind;
-  usesMcpResources(): boolean;
-  list(query: SkillListQuery): Promise<SkillCatalogLike>;
-  read(request: SkillReadRequest): Promise<SkillReadResult>;
-  search(request: SkillSearchRequest): Promise<SkillSearchResult>;
-}
-
 export interface SkillLoadOutcome {
   skills: SkillMetadata[];
   warnings: { path: string; message: string }[];
 }
 
 export interface SkillStepState {
-  hostCatalog: SkillCatalogLike;
   catalog: SkillCatalogLike;
-  toolsEnabled: boolean;
 }
 
 export interface SkillFragment {

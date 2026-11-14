@@ -24,7 +24,6 @@ describe("SkillRuntime", () => {
     });
     const step = await runtime.prepareStep({ cwd: root });
     expect(step.catalog.entries.map((entry) => entry.name)).toEqual(["demo"]);
-    expect(step.toolsEnabled).toBe(false);
     expect(runtime.renderCatalog(step)).toContain("- demo: Demo skill");
   });
 

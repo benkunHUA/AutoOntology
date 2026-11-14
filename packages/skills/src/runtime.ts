@@ -1,4 +1,3 @@
-import { mergeCatalogs, SkillCatalog } from "./catalog.ts";
 import {
   DEFAULT_CATALOG_BUDGET_CHARS,
   MAIN_PROMPT_BYTES,
@@ -11,9 +10,9 @@ import { selectExplicitSkills } from "./selection.ts";
 import type {
   SkillFragment,
   SkillInput,
-  SkillProvider,
+  SkillReadRequest,
+  SkillReadResult,
   SkillRoot,
-  SkillSourceKind,
   SkillStepState,
 } from "./types.ts";
 
@@ -25,17 +24,13 @@ export interface SkillRuntimeOptions {
   omitDescriptions?: boolean;
   disabledPaths?: ReadonlySet<string>;
   disabledNames?: ReadonlySet<string>;
-  providers?: Partial<Record<SkillSourceKind, SkillProvider>>;
 }
 
 export class SkillRuntime {
   private stepState: SkillStepState | null = null;
   private hostProvider: HostSkillProvider | null = null;
-  private readonly providers: Partial<Record<SkillSourceKind, SkillProvider>>;
 
-  constructor(private readonly options: SkillRuntimeOptions = {}) {
-    this.providers = options.providers ?? {};
-  }
+  constructor(private readonly options: SkillRuntimeOptions = {}) {}
 
   get product(): string | undefined {
     return this.options.product;
@@ -45,13 +40,8 @@ export class SkillRuntime {
     return this.stepState;
   }
 
-  providerFor(kind: SkillSourceKind): SkillProvider | undefined {
-    return this.providers[kind] ?? (kind === "host" ? this.hostProvider ?? undefined : undefined);
-  }
-
   async prepareStep(input: {
     cwd: string;
-    selectedRoots?: string[];
     product?: string;
   }): Promise<SkillStepState> {
     const product = input.product ?? this.options.product;
@@ -59,32 +49,26 @@ export class SkillRuntime {
       ? this.options.rootResolver({ cwd: input.cwd })
       : resolveSkillRoots({ cwd: input.cwd });
 
-    const host =
-      this.providers.host ??
-      new HostSkillProvider({
-        roots,
-        product,
-        disabledPaths: this.options.disabledPaths,
-        disabledNames: this.options.disabledNames,
-      });
-    if (host instanceof HostSkillProvider) this.hostProvider = host;
+    const host = new HostSkillProvider({
+      roots,
+      product,
+      disabledPaths: this.options.disabledPaths,
+      disabledNames: this.options.disabledNames,
+    });
+    this.hostProvider = host;
 
-    const hostCatalog = await host.list({ turnId: "turn" });
-    const [cloud, executor] = await Promise.all([
-      this.providers.cloud
-        ? this.providers.cloud.list({ turnId: "step", includeCloudSkills: true })
-        : Promise.resolve<SkillCatalog | null>(null),
-      this.providers.executor
-        ? this.providers.executor.list({ executorRoots: input.selectedRoots ?? [] })
-        : Promise.resolve(new SkillCatalog()),
-    ]);
-
-    const catalog = mergeCatalogs(cloud, executor).extend(hostCatalog);
-    const toolsEnabled = Boolean(
-      this.providers.cloud || (input.selectedRoots?.length ?? 0) > 0,
-    );
-    this.stepState = { hostCatalog, catalog, toolsEnabled };
+    const catalog = await host.list();
+    this.stepState = { catalog };
     return this.stepState;
+  }
+
+  async readResource(
+    request: Omit<SkillReadRequest, "cursor">,
+  ): Promise<SkillReadResult> {
+    if (!this.hostProvider) {
+      throw new Error("skills not prepared");
+    }
+    return this.hostProvider.read(request);
   }
 
   renderCatalog(step: SkillStepState): string {
@@ -100,9 +84,10 @@ export class SkillRuntime {
   ): Promise<SkillFragment[]> {
     const fragments: SkillFragment[] = [];
     for (const entry of selectExplicitSkills(inputs, step.catalog)) {
-      const provider = this.providerFor(entry.authority.kind);
-      if (!provider) continue;
-      const result = await provider.read({ entry, resource: entry.mainPrompt });
+      const result = await this.readResource({
+        entry,
+        resource: entry.mainPrompt,
+      });
       fragments.push({
         role: "user",
         name: entry.name,

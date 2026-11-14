@@ -5,13 +5,9 @@ import { discoverSkills } from "./discovery.ts";
 import { SKILL_RESOURCE_BYTES } from "./limits.ts";
 import type {
   SkillCatalogEntry,
-  SkillListQuery,
-  SkillProvider,
   SkillReadRequest,
   SkillReadResult,
   SkillRoot,
-  SkillSearchRequest,
-  SkillSearchResult,
 } from "./types.ts";
 
 export interface HostSkillProviderOptions {
@@ -21,16 +17,10 @@ export interface HostSkillProviderOptions {
   disabledNames?: ReadonlySet<string>;
 }
 
-export class HostSkillProvider implements SkillProvider {
-  readonly kind = "host" as const;
-
+export class HostSkillProvider {
   constructor(private readonly options: HostSkillProviderOptions) {}
 
-  usesMcpResources(): boolean {
-    return false;
-  }
-
-  async list(_query: SkillListQuery = {}): Promise<SkillCatalog> {
+  async list(): Promise<SkillCatalog> {
     const outcome = await discoverSkills({
       roots: this.options.roots,
       product: this.options.product,
@@ -55,9 +45,6 @@ export class HostSkillProvider implements SkillProvider {
     };
   }
 
-  async search(_request: SkillSearchRequest): Promise<SkillSearchResult> {
-    return { results: [] };
-  }
 }
 
 function hostEntry(skill: {

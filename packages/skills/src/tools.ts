@@ -2,8 +2,6 @@ import type { ToolHandler, ToolResult } from "@ao/protocol";
 import { SKILLS_LIST_PAGE_SIZE, TOOL_RESPONSE_BYTES } from "./limits.ts";
 import type { SkillRuntime } from "./runtime.ts";
 
-const AUTHORITIES = ["host", "executor", "cloud", "custom"] as const;
-
 export function createSkillTools(runtime: SkillRuntime): ToolHandler[] {
   return [listSkills(runtime), readSkill(runtime)];
 }
@@ -12,21 +10,15 @@ function listSkills(runtime: SkillRuntime): ToolHandler {
   return {
     spec: {
       name: "skills.list",
-      description: "List skills available from a skill authority, with pagination.",
+      description: "List available skills, with pagination.",
       parameters: {
         type: "object",
         properties: {
-          authority: {
-            type: "string",
-            enum: [...AUTHORITIES],
-            description: "Skill source to list.",
-          },
           cursor: {
             type: "string",
             description: "Pagination cursor from a previous response.",
           },
         },
-        required: ["authority"],
         additionalProperties: false,
       },
       supportsParallel: true,
@@ -34,11 +26,8 @@ function listSkills(runtime: SkillRuntime): ToolHandler {
     async execute(args): Promise<ToolResult> {
       const step = runtime.currentStep;
       if (!step) return { ok: false, output: "skills not prepared" };
-      const authority = String(args.authority);
       const offset = parseCursor(args.cursor);
-      const entries = step.catalog.entries.filter(
-        (entry) => entry.authority.kind === authority,
-      );
+      const entries = step.catalog.entries;
       const page = entries.slice(offset, offset + SKILLS_LIST_PAGE_SIZE);
       const nextCursor =
         offset + page.length < entries.length
@@ -93,14 +82,10 @@ function readSkill(runtime: SkillRuntime): ToolHandler {
       const pkg = String(args.package);
       const entry = step.catalog.entries.find((candidate) => candidate.id === pkg);
       if (!entry) return { ok: false, output: `unknown skill package: ${pkg}` };
-      const provider = runtime.providerFor(entry.authority.kind);
-      if (!provider) {
-        return { ok: false, output: `no provider for ${entry.authority.kind}` };
-      }
       const resource =
         typeof args.resource === "string" ? args.resource : entry.mainPrompt;
       try {
-        const result = await provider.read({ entry, resource });
+        const result = await runtime.readResource({ entry, resource });
         const offset = parseCursor(args.cursor);
         const page = result.contents.slice(offset, offset + TOOL_RESPONSE_BYTES);
         const nextCursor =
