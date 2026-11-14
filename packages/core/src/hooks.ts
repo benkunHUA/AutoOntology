@@ -1,5 +1,5 @@
 /**
- * 扩展点（对应设计 14 节）。全部可选，默认行为不依赖任何钩子。
+ * 扩展点。全部可选，默认行为不依赖任何钩子。
  */
 import type { FunctionCallItem, ToolResult } from "@ao/protocol";
 import type { PendingInput } from "./input-queue.ts";
@@ -9,6 +9,7 @@ export interface ToolEndInfo {
   call: FunctionCallItem;
   result: ToolResult;
   durationMs: number;
+  tags?: Record<string, string>;
 }
 
 export interface TurnSummary {

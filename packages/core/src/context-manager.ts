@@ -1,10 +1,10 @@
 /**
- * 对话历史（对应 ContextManager / 历史即事实源 G2）。
+ * 对话历史。
  *
- * 不变量 I2：只追加。所有修改都经过 append，便于：
+ * 历史只追加。所有修改都经过 append，便于：
  * - 追加式落盘
  * - 前缀缓存友好（不修改已有条目）
- * - 世界状态差异注入（M2，以追加带标记的消息实现）
+ * - 世界状态差异注入（以追加带标记的消息实现）
  */
 import type { FunctionCallOutputItem, HistoryItem } from "@ao/protocol";
 import { functionCallOutput } from "@ao/protocol";
@@ -54,7 +54,7 @@ export class ContextManager {
   }
 
   /**
-   * 不变量 I3：每个 function_call 必须有对应 output。
+   * 每个 function_call 必须有对应 output。
    * 取消/出错路径调用：为缺失结果的调用补「被中断」条目。
    */
   backfillMissingToolOutputs(reason: string): FunctionCallOutputItem[] {

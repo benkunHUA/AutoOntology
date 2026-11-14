@@ -1,8 +1,8 @@
 /**
- * 待处理输入队列（对应设计 InputQueue）。
+ * 待处理输入队列。
  *
  * 输入只在两个采样步骤之间被消费（drain）；运行中的回合通过 hasPending
- * 判断「是否要再走一步」。即时中断（提前打断流）属 M2 增强，骨架未启用。
+ * 判断「是否要再走一步」。即时中断（提前打断流）暂未启用。
  */
 export interface PendingInput {
   text: string;

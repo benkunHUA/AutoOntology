@@ -1,7 +1,7 @@
 /**
  * 会话持久化：追加式 JSONL（一行一个历史条目）。
  *
- * 不变量 I7：发终止事件前历史已落盘 → 上层在发事件前 await flush()。
+ * 发终止事件前历史已落盘 → 上层在发事件前 await flush()。
  * 写入串行化：所有 append 进入同一条 promise 链，保证行序即历史序。
  */
 import { appendFile, mkdir } from "node:fs/promises";

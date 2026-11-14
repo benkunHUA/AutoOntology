@@ -1,5 +1,5 @@
 /**
- * 步骤快照（StepContext）：一次采样请求的权限与环境快照（G3）。
+ * 步骤快照：一次采样请求的权限与环境快照。
  * 工具执行时读取的永远是「捕获时」的版本，回合中途变更配置不影响在途调用。
  */
 import type { ToolRouter } from "./tools/router.ts";

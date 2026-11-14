@@ -1,5 +1,5 @@
 /**
- * 回合上下文（TurnContext）：整轮冻结的身份与配置（不变量 G3）。
+ * 回合上下文：整轮冻结的身份与配置。
  * 构造后不可变；步骤级快照见 StepContext。
  */
 export interface TurnContext {

@@ -1,7 +1,7 @@
 /**
- * 对话历史的条目模型（对应 Responses API 的 items）。
+ * 对话历史的条目模型。
  *
- * 不变量 I2：历史只追加，不原地修改。所有条目都是可 JSON 序列化的纯数据，
+ * 历史只追加，不原地修改。所有条目都是可 JSON 序列化的纯数据，
  * 便于追加式落盘与断点恢复。
  */
 
@@ -29,7 +29,7 @@ export interface FunctionCallOutputItem {
   ok: boolean;
 }
 
-/** 中断标记：任务被取消时追加，保证 I8「中断必须留痕」。 */
+/** 中断标记：任务被取消时追加，保证中断必须留痕。 */
 export interface TurnMarkerItem {
   type: "turn_marker";
   kind: "aborted" | "error" | "compacted";
