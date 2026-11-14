@@ -1,56 +1,77 @@
 /**
- * 工具路由（对应 ToolRouter）：持有工具表，构建下发给模型的 schema，
- * 把 function_call 解析到具体执行器。每次采样生成一个实例（不可变快照）。
+ * 工具路由：每次采样编译出的不可变工具快照。
+ *
+ * 注册期（ToolRegistry）与应用期（resolve / modelVisibleSpecs）分离：
+ * 本实例只读，不修改花名册；可见性校验与分发来自同一份快照。
  */
 import type {
   FunctionCallItem,
   ToolHandler,
   ToolSchemaNode,
-  ToolSpec,
 } from "@ao/protocol";
+import type { ToolPolicy } from "./registry.ts";
+import {
+  ToolRegistry,
+  toolNameKey,
+  trustedRegistry,
+  type RegisteredTool,
+} from "./registry.ts";
 
 export interface ResolvedToolCall {
   call: FunctionCallItem;
-  handler: ToolHandler;
+  handler?: ToolHandler;
   args: Record<string, unknown>;
   /** 参数解析失败时的失败结果（跳过执行，直接回填）。 */
   failure?: { ok: boolean; output: string };
 }
 
 export class ToolRouter {
-  private readonly handlers = new Map<string, ToolHandler>();
+  private readonly tools: ReadonlyMap<string, RegisteredTool>;
+  private readonly firstCollision: string | null;
 
-  constructor(handlers: ToolHandler[]) {
-    for (const handler of handlers) {
-      if (this.handlers.has(handler.spec.name)) {
-        throw new Error(`duplicate tool: ${handler.spec.name}`);
-      }
-      this.handlers.set(handler.spec.name, handler);
-    }
+  constructor(handlers: readonly ToolHandler[], policy?: ToolPolicy);
+  constructor(registry: ToolRegistry);
+  constructor(source: readonly ToolHandler[] | ToolRegistry, policy?: ToolPolicy) {
+    const registry =
+      source instanceof ToolRegistry ? source : trustedRegistry(source, policy);
+    this.tools = new Map(
+      registry
+        .entries()
+        .map((entry) => [
+          toolNameKey(entry.handler.spec.name, entry.handler.spec.namespace),
+          entry,
+        ]),
+    );
+    this.firstCollision = registry.collision();
   }
 
   modelVisibleSpecs(): ToolSchemaNode[] {
-    return [...this.handlers.values()].map((h) => ({
-      name: h.spec.name,
-      description: h.spec.description,
-      parameters: h.spec.parameters,
-    }));
-  }
-
-  spec(name: string): ToolSpec | undefined {
-    return this.handlers.get(name)?.spec;
+    return [...this.tools.values()]
+      .filter((entry) => entry.exposure === "direct")
+      .map((entry) => ({
+        name: entry.handler.spec.name,
+        description: entry.handler.spec.description,
+        parameters: entry.handler.spec.parameters,
+      }));
   }
 
   supportsParallel(name: string): boolean {
-    return this.handlers.get(name)?.spec.supportsParallel === true;
+    return this.tools.get(toolNameKey(name))?.handler.spec.supportsParallel === true;
+  }
+
+  registeredTool(name: string): ToolHandler | undefined {
+    return this.tools.get(toolNameKey(name))?.handler;
+  }
+
+  collision(): string | null {
+    return this.firstCollision;
   }
 
   resolve(call: FunctionCallItem): ResolvedToolCall {
-    const handler = this.handlers.get(call.name);
+    const handler = this.registeredTool(call.name);
     if (!handler) {
       return {
         call,
-        handler: missingHandler,
         args: {},
         failure: { ok: false, output: `unknown tool: ${call.name}` },
       };
@@ -74,10 +95,3 @@ export class ToolRouter {
     }
   }
 }
-
-const missingHandler: ToolHandler = {
-  spec: { name: "<missing>", description: "", parameters: {} },
-  async execute() {
-    return { ok: false, output: "unknown tool" };
-  },
-};

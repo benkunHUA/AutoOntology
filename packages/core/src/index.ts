@@ -10,6 +10,7 @@ export * from "./persistence.ts";
 export * from "./compaction.ts";
 export * from "./tasks/task.ts";
 export * from "./tasks/regular.ts";
+export * from "./tools/registry.ts";
 export * from "./tools/router.ts";
 export * from "./tools/orchestrator.ts";
 export * from "./tools/runtime.ts";
