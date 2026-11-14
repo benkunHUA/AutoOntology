@@ -6,7 +6,7 @@ import { writeFile } from "./write-file.ts";
 
 export { execCommand, listDir, readFile, writeFile };
 
-/** 默认工具集。M3 起按 enabled 配置过滤。 */
+/** 默认工具集。 */
 export function defaultTools(): ToolHandler[] {
   return [execCommand, readFile, writeFile, listDir];
 }

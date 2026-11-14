@@ -1,8 +1,8 @@
 import { readdir } from "node:fs/promises";
-import { resolve } from "node:path";
-import type { ToolHandler } from "@ao/protocol";
+import { resolveWorkspacePath } from "./workspace-path.ts";
+import { defineTool } from "./define-tool.ts";
 
-export const listDir: ToolHandler = {
+export const listDir = defineTool({
   spec: {
     name: "list_dir",
     description: "List entries of a directory (non-recursive).",
@@ -18,20 +18,33 @@ export const listDir: ToolHandler = {
     },
     supportsParallel: true,
   },
+  sandboxable: {
+    sandboxPreference: () => "default",
+    escalateOnFailure: () => true,
+  },
+  approvable: {
+    sandboxPermissions: () => "use_default",
+    shouldBypassApproval: (policy, alreadyApproved) =>
+      alreadyApproved || policy === "never",
+    execApprovalRequirement: () => "skip",
+    wantsNoSandboxApproval: () => false,
+    approvalAction: (args) => `list ${String(args.path ?? ".")}`,
+  },
 
-  async execute(args, ctx) {
-    const path = resolve(ctx.cwd, String(args.path ?? "."));
-    if (!path.startsWith(ctx.cwd)) {
-      return { ok: false, output: `path escapes workspace: ${args.path}` };
+  async run(args, ctx) {
+    const resolved = resolveWorkspacePath(ctx.cwd, String(args.path ?? "."));
+    if (!resolved.ok) {
+      return { ok: false, output: resolved.reason };
     }
     try {
-      const entries = await readdir(path, { withFileTypes: true });
+      const entries = await readdir(resolved.path, { withFileTypes: true });
       const lines = entries
         .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()))
         .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
       return { ok: true, output: lines.join("\n") || "[empty]" };
     } catch (error) {
+      if (ctx.signal.aborted) throw ctx.signal.reason ?? error;
       return { ok: false, output: (error as Error).message };
     }
   },
-};
+});
