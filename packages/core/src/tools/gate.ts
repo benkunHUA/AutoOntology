@@ -1,11 +1,13 @@
 /**
- * 工具并发门（对应设计 10.1「并发模型」）。
+ * 工具并发门。
  *
  * 语义：可并行工具持读锁，独占工具持写锁。写者优先——
  * 有写者在等待时不再放新读者进入，避免独占工具被读请求饿死。
  */
 type Waiter = {
   resolve: (release: () => void) => void;
+  reject: (error: unknown) => void;
+  cleanup: () => void;
 };
 
 export class ReadWriteGate {
@@ -14,16 +16,9 @@ export class ReadWriteGate {
   private waitingWriters: Waiter[] = [];
   private waitingReaders: Waiter[] = [];
 
-  async acquireRead(): Promise<() => void> {
+  async acquireRead(signal?: AbortSignal): Promise<() => void> {
     if (this.writing || this.waitingWriters.length > 0) {
-      await new Promise<void>((resolve) =>
-        this.waitingReaders.push({
-          resolve: () => {
-            this.readers++;
-            resolve();
-          },
-        }),
-      );
+      await this.enqueue(this.waitingReaders, signal, "read");
     } else {
       this.readers++;
     }
@@ -36,16 +31,9 @@ export class ReadWriteGate {
     };
   }
 
-  async acquireWrite(): Promise<() => void> {
+  async acquireWrite(signal?: AbortSignal): Promise<() => void> {
     if (this.writing || this.readers > 0) {
-      await new Promise<void>((resolve) =>
-        this.waitingWriters.push({
-          resolve: () => {
-            this.writing = true;
-            resolve();
-          },
-        }),
-      );
+      await this.enqueue(this.waitingWriters, signal, "write");
     } else {
       this.writing = true;
     }
@@ -61,13 +49,57 @@ export class ReadWriteGate {
   private wakeNext(): void {
     if (this.writing) return;
     if (this.waitingWriters.length > 0) {
-      this.waitingWriters.shift()!.resolve(() => {});
+      const waiter = this.waitingWriters.shift()!;
+      waiter.cleanup();
+      this.writing = true;
+      waiter.resolve(() => {});
       return;
     }
     if (this.readers === 0) {
       const readers = this.waitingReaders;
       this.waitingReaders = [];
-      for (const w of readers) w.resolve(() => {});
+      this.readers = readers.length;
+      for (const w of readers) {
+        w.cleanup();
+        w.resolve(() => {});
+      }
     }
+  }
+
+  private enqueue(
+    queue: Waiter[],
+    signal: AbortSignal | undefined,
+    _kind: "read" | "write",
+  ): Promise<() => void> {
+    if (signal?.aborted) {
+      return Promise.reject(signal.reason ?? new Error("aborted"));
+    }
+    return new Promise<() => void>((resolve, reject) => {
+      let settled = false;
+      const waiter: Waiter = {
+        resolve: (release) => {
+          if (settled) return;
+          settled = true;
+          waiter.cleanup();
+          resolve(release);
+        },
+        reject: (error) => {
+          if (settled) return;
+          settled = true;
+          waiter.cleanup();
+          reject(error);
+        },
+        cleanup: () => {
+          if (signal) signal.removeEventListener("abort", onAbort);
+        },
+      };
+      const onAbort = () => {
+        const index = queue.indexOf(waiter);
+        if (index >= 0) queue.splice(index, 1);
+        waiter.reject(signal!.reason ?? new Error("aborted"));
+      };
+      if (signal) signal.addEventListener("abort", onAbort, { once: true });
+      queue.push(waiter);
+    });
   }
 }

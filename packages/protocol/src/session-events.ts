@@ -18,6 +18,14 @@ export type SessionEvent =
       ok: boolean;
       output: string;
       durationMs: number;
+      tags?: Record<string, string>;
+    }
+  | {
+      type: "tool_aborted";
+      callId: string;
+      name: string;
+      output: string;
+      durationMs: number;
     }
   | {
       type: "turn_completed";

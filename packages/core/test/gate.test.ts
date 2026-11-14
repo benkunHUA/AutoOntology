@@ -68,4 +68,18 @@ describe("ReadWriteGate", () => {
     const r = await gate.acquireWrite();
     r();
   });
+
+  it("等待中的获取可被 abort 取消", async () => {
+    const gate = new ReadWriteGate();
+    const releaseRead = await gate.acquireRead();
+    const controller = new AbortController();
+
+    const pending = gate.acquireWrite(controller.signal);
+    controller.abort(new Error("cancelled"));
+    await expect(pending).rejects.toThrow("cancelled");
+
+    releaseRead();
+    const releaseWrite = await gate.acquireWrite();
+    releaseWrite();
+  });
 });
