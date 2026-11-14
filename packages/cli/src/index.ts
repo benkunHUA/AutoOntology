@@ -33,6 +33,10 @@ async function main(): Promise<void> {
 
   const renderer = createRenderer();
   const approval: ApprovalGate = createApprovalGate(useMock);
+  const skills = {
+    enabled: process.env.AO_SKILLS !== "0",
+    product: "codex",
+  };
   const session = new Session({
     cwd,
     model: useMock ? "mock" : (process.env.AO_MODEL ?? "gpt-5-codex"),
@@ -40,6 +44,7 @@ async function main(): Promise<void> {
     client,
     handlers: defaultTools(),
     approval,
+    skills,
     emit: (event) => renderer.render(event),
     persistence: new JsonlPersistence(
       resolve(cwd, ".ao", "sessions", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`),
