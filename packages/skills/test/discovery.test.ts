@@ -18,19 +18,19 @@ async function fixture(): Promise<string> {
 }
 
 describe("resolveSkillRoots", () => {
-  it("按发现顺序去重，首次出现保留", async () => {
+  it("只解析 cwd/.ontology/skills", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ao-roots-"));
-    const extra = join(dir, ".codex", "skills");
-    await mkdir(extra, { recursive: true });
-    const roots = resolveSkillRoots({
-      cwd: dir,
-      codexHome: undefined,
-      home: dir,
-      extraRoots: [{ path: extra, scope: "user" }],
-    });
+    const expected = join(dir, ".ontology", "skills");
+    await mkdir(expected, { recursive: true });
+    const roots = resolveSkillRoots({ cwd: dir });
     const paths = roots.map((root) => root.path);
-    expect(paths[0]).toBe(extra);
-    expect(paths.filter((path) => path === extra).length).toBe(1);
+    expect(paths).toEqual([expected]);
+    expect(roots[0].scope).toBe("repo");
+  });
+
+  it("目录不存在时返回空", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ao-roots-"));
+    expect(resolveSkillRoots({ cwd: dir })).toEqual([]);
   });
 });
 

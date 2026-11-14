@@ -28,7 +28,7 @@ Skill 是可发现、按需加载的指令包：系统扫描目录中的 `SKILL.
 目录注入模型上下文；输入 `$skill-name` 会按需读取并注入对应正文。可用工具：
 `skills.list` 与 `skills.read`。
 
-- 默认扫描根：`<cwd>/.codex/skills`、`$CODEX_HOME/skills`、`~/.agents/skills`、`$CODEX_HOME/skills/.system` 及各级父目录的 `.agents/skills`。
+- 默认扫描根：`<cwd>/.ontology/skills`。
 - `SKILL.md` 需要 YAML frontmatter（`name`、`description`，可选 `short-description`）。
 - 产品过滤默认 `codex`；设置 `AO_SKILLS=0` 可关闭技能注入。
 

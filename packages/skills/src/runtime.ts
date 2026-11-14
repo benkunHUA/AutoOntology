@@ -51,14 +51,13 @@ export class SkillRuntime {
 
   async prepareStep(input: {
     cwd: string;
-    pluginRoots?: SkillRoot[];
     selectedRoots?: string[];
     product?: string;
   }): Promise<SkillStepState> {
     const product = input.product ?? this.options.product;
     const roots = this.options.rootResolver
-      ? this.options.rootResolver({ cwd: input.cwd, pluginRoots: input.pluginRoots })
-      : resolveSkillRoots({ cwd: input.cwd, pluginRoots: input.pluginRoots });
+      ? this.options.rootResolver({ cwd: input.cwd })
+      : resolveSkillRoots({ cwd: input.cwd });
 
     const host =
       this.providers.host ??
