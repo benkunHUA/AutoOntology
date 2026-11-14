@@ -7,3 +7,5 @@ export * from "./discovery.ts";
 export * from "./catalog.ts";
 export * from "./selection.ts";
 export * from "./render.ts";
+export * from "./provider.ts";
+export * from "./runtime.ts";
