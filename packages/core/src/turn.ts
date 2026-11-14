@@ -15,6 +15,7 @@ import {
   TurnError,
   throwIfAborted,
 } from "./errors.ts";
+import type { SkillRuntime } from "@ao/skills";
 import type { AgentHooks, TurnSummary } from "./hooks.ts";
 import type { ContextManager } from "./context-manager.ts";
 import type { InputQueue } from "./input-queue.ts";
@@ -26,6 +27,7 @@ import { ToolOrchestrator } from "./tools/orchestrator.ts";
 import { createSandboxManager } from "./tools/sandbox.ts";
 import { ToolCallRuntime } from "./tools/runtime.ts";
 import { shouldCompact } from "./compaction.ts";
+import { injectSkillMentions, prepareTurnSkills } from "./skills.ts";
 import { streamWithRetry } from "@ao/api";
 import type {
   ApprovalGate,
@@ -49,6 +51,7 @@ export interface RunTurnDeps {
   signal: AbortSignal;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
+  skills?: { runtime: SkillRuntime; initialText: string };
 }
 
 export interface TurnResult {
@@ -58,6 +61,12 @@ export interface TurnResult {
 
 export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
   const { turn, history, inputQueue, client, router, emit, hooks, signal } = deps;
+  const preparedSkills = await prepareTurnSkills(
+    deps.skills?.runtime ?? null,
+    turn,
+    history,
+    deps.skills?.initialText ?? "",
+  );
   const orchestrator = new ToolOrchestrator({
     approval: deps.approval,
     sandbox: deps.sandbox ?? createSandboxManager(),
@@ -80,6 +89,15 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
         : pending.text;
       if (reviewed === null) continue; // 被钩子拦截
       history.append(message("user", reviewed));
+      if (preparedSkills) {
+        await injectSkillMentions(
+          preparedSkills.runtime,
+          preparedSkills.step,
+          preparedSkills.injectedPaths,
+          history,
+          reviewed,
+        );
+      }
     }
 
     // ── 开火前压缩体检：压缩先于新输入落账，目前只做判定告警 ──

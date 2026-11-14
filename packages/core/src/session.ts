@@ -17,6 +17,7 @@ import type {
   SessionEvent,
   ToolHandler,
 } from "@ao/protocol";
+import type { SkillRuntime } from "@ao/skills";
 import { message } from "@ao/protocol";
 import { ContextManager } from "./context-manager.ts";
 import { InputQueue } from "./input-queue.ts";
@@ -28,6 +29,11 @@ import { AbortedError } from "./errors.ts";
 import type { AbortReason } from "./errors.ts";
 import { RegularTask } from "./tasks/regular.ts";
 import type { SessionTask } from "./tasks/task.ts";
+import {
+  createSkillRuntime,
+  createSkillToolHandlers,
+  type SkillsOptions,
+} from "./skills.ts";
 import { ToolRouter } from "./tools/router.ts";
 
 export type SubmissionMode = "start-or-steer" | "start-if-idle" | "steer";
@@ -44,6 +50,7 @@ export interface SessionOptions {
   persistence?: JsonlPersistence;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
+  skills?: SkillsOptions;
 }
 
 interface TurnStats {
@@ -69,13 +76,18 @@ export class Session {
 
   private readonly options: SessionOptions;
   private readonly router: ToolRouter;
+  private readonly skillRuntime: SkillRuntime | null;
   private active: ActiveTurn | null = null;
   private turnSeq = 0;
   private idleWaiters: Array<() => void> = [];
 
   constructor(options: SessionOptions) {
     this.options = options;
-    this.router = new ToolRouter(options.handlers);
+    this.skillRuntime = createSkillRuntime(options.skills);
+    this.router = new ToolRouter([
+      ...options.handlers,
+      ...(this.skillRuntime ? createSkillToolHandlers(this.skillRuntime) : []),
+    ]);
     this.history = new ContextManager({
       onAppend: (item) => options.persistence?.append(item),
     });
@@ -146,11 +158,11 @@ export class Session {
       stats: { firstTokenAt: null, toolCalls: 0 },
     };
 
-    active.done = this.runTask(active).finally(() => this.onTaskFinished(active));
+    active.done = this.runTask(active, text).finally(() => this.onTaskFinished(active));
     this.active = active;
   }
 
-  private async runTask(active: ActiveTurn): Promise<void> {
+  private async runTask(active: ActiveTurn, initialText: string): Promise<void> {
     try {
       const result = await active.task.run({
         turn: active.context,
@@ -163,6 +175,9 @@ export class Session {
         signal: active.controller.signal,
         approval: this.options.approval,
         sandbox: this.options.sandbox,
+        skills: this.skillRuntime
+          ? { runtime: this.skillRuntime, initialText }
+          : undefined,
       });
       this.pendingResult = result;
     } catch (error) {

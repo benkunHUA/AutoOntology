@@ -8,6 +8,7 @@ export * from "./hooks.ts";
 export * from "./errors.ts";
 export * from "./persistence.ts";
 export * from "./compaction.ts";
+export * from "./skills.ts";
 export * from "./tasks/task.ts";
 export * from "./tasks/regular.ts";
 export * from "./tools/registry.ts";
