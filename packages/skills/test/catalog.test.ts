@@ -20,10 +20,10 @@ function entry(
 }
 
 describe("SkillCatalog", () => {
-  it("按 (authority, id, environmentId) 去重，extend 保留警告", () => {
+  it("按 (authority, id) 去重，extend 保留警告", () => {
     const a = new SkillCatalog([entry("x", "x")], ["w1"], false);
     const b = new SkillCatalog(
-      [entry("x", "x"), entry("y", "y", { environmentId: "env1" })],
+      [entry("x", "x"), entry("y", "y")],
       ["w2"],
       true,
     );

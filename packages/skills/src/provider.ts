@@ -58,7 +58,6 @@ function hostEntry(skill: {
   description: string;
   shortDescription?: string;
   pathToSkillMd: string;
-  pluginId?: string;
 }): SkillCatalogEntry {
   return {
     id: `skill://${skill.pathToSkillMd}`,
@@ -67,10 +66,8 @@ function hostEntry(skill: {
     description: skill.description,
     shortDescription: skill.shortDescription,
     mainPrompt: skill.pathToSkillMd,
-    displayPath: skill.pathToSkillMd,
     enabled: true,
     promptVisible: true,
-    pluginId: skill.pluginId,
   };
 }
 

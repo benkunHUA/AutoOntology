@@ -116,7 +116,6 @@ export async function discoverSkills(
           ...policy,
           pathToSkillMd: canonical,
           scope: root.scope,
-          pluginId: root.pluginId,
         });
       } catch (error) {
         warnings.push({

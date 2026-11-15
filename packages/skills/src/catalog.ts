@@ -23,7 +23,7 @@ export class SkillCatalog implements SkillCatalogLike {
   }
 
   private key(entry: SkillCatalogEntry): string {
-    return `${entry.authority.kind}:${entry.id}:${entry.environmentId ?? ""}`;
+    return `${entry.authority.kind}:${entry.id}`;
   }
 
   pushEntry(entry: SkillCatalogEntry): void {

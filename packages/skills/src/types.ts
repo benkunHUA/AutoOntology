@@ -13,8 +13,6 @@ export interface SkillMetadata {
   shortDescription?: string;
   pathToSkillMd: string;
   scope: SkillScope;
-  pluginId?: string;
-  remotePluginId?: string;
   allowImplicitInvocation: boolean;
   products: string[];
 }
@@ -24,47 +22,15 @@ export interface SkillAuthority {
   id: string;
 }
 
-export interface SkillPackageId {
-  value: string;
-}
-
-export interface SkillResourceId {
-  uri: string;
-  environmentId?: string;
-  packageRoot?: string;
-}
-
-export interface SkillSourceLocation {
-  authority: SkillAuthority;
-  package: SkillPackageId;
-  mainPrompt: SkillResourceId;
-  displayPath: string;
-  pluginId?: string;
-  enabled: boolean;
-  promptVisible: boolean;
-}
-
-export interface SkillToolDependency {
-  type: string;
-  value: string;
-  description?: string;
-}
-
 export interface SkillCatalogEntry {
   id: string;
-  environmentId?: string;
   authority: SkillAuthority;
   name: string;
   description: string;
   shortDescription?: string;
   mainPrompt: string;
-  displayPath?: string;
-  sources?: SkillSourceLocation[];
-  dependencies?: { tools: SkillToolDependency[] };
   enabled: boolean;
   promptVisible: boolean;
-  pluginId?: string;
-  remotePluginId?: string;
 }
 
 export interface SkillCatalogLike {
@@ -79,7 +45,6 @@ export interface SkillCatalogLike {
 export interface SkillRoot {
   path: string;
   scope: SkillScope;
-  pluginId?: string;
 }
 
 export interface SkillReadRequest {
