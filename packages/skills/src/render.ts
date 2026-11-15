@@ -1,4 +1,9 @@
-/** 渲染可用技能目录，按预算降级并截断。 */
+/**
+ * 可用技能目录渲染。
+ *
+ * 将目录渲染为 developer 片段，按预算依次降级为带描述、仅名称、
+ * 截断并提示省略数量；单条描述截断到 1024 字符。
+ */
 import {
   DEFAULT_CATALOG_BUDGET_CHARS,
   MAX_DESCRIPTION_CHARS,

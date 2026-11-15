@@ -1,4 +1,9 @@
-/** 基于本地文件系统的技能 Provider。 */
+/**
+ * 本地文件系统的技能 Provider。
+ *
+ * 负责扫描发现（list）与按路径读取资源（read）；
+ * 读取时校验 UTF-8，并按 1 MiB 上限截断。
+ */
 import { isUtf8 } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { SkillCatalog } from "./catalog.ts";

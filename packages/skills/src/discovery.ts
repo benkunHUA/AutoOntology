@@ -1,4 +1,9 @@
-/** 遍历并发现 SKILL.md，解析元数据、过滤、去重与稳定排序。 */
+/**
+ * 技能发现。
+ *
+ * 限深遍历 SKILL.md，解析元数据与策略，执行 product / 禁用过滤、
+ * canonical 去重与稳定排序；扫描超限或解析失败产生 warning 而不中断。
+ */
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {

@@ -1,4 +1,8 @@
-/** @ao/skills 包的公共导出。 */
+/**
+ * @ao/skills 包的公共导出。
+ *
+ * 仅做 re-export，不包含实现逻辑。
+ */
 export * from "./types.ts";
 export * from "./limits.ts";
 export * from "./frontmatter.ts";

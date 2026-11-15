@@ -1,4 +1,8 @@
-/** skills.list 与 skills.read 工具。 */
+/**
+ * skills.list 与 skills.read 工具。
+ *
+ * 暴露给模型的只读工具，分别支持 20 条与 512 KiB 分页。
+ */
 import type { ToolHandler, ToolResult } from "@ao/protocol";
 import { SKILLS_LIST_PAGE_SIZE, TOOL_RESPONSE_BYTES } from "./limits.ts";
 import type { SkillRuntime } from "./runtime.ts";

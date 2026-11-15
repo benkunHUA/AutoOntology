@@ -1,4 +1,9 @@
-/** 技能目录集合：去重、合并与可见性过滤。 */
+/**
+ * 技能目录集合。
+ *
+ * 按 (authority, id, environmentId) 去重，提供合并与可见性过滤，
+ * 是目录渲染与显式选择的统一数据入口。
+ */
 import type { SkillCatalogLike, SkillCatalogEntry } from "./types.ts";
 
 export class SkillCatalog implements SkillCatalogLike {

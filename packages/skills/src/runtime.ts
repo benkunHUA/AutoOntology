@@ -1,4 +1,9 @@
-/** 技能运行时编排：准备目录、渲染目录、按需读取正文。 */
+/**
+ * 技能运行时编排。
+ *
+ * 每轮准备一次目录快照，提供目录渲染与按需读取正文的入口，
+ * 是 core 接入技能的唯一门面。
+ */
 import {
   DEFAULT_CATALOG_BUDGET_CHARS,
   MAIN_PROMPT_BYTES,

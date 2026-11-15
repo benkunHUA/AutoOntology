@@ -1,4 +1,9 @@
-/** 技能系统领域模型与接口。 */
+/**
+ * 技能系统的领域模型与接口。
+ *
+ * 只包含跨模块共享的类型定义，不引入运行时逻辑；
+ * 其他模块单向依赖本文件，保证类型边界清晰。
+ */
 export type SkillScope = "repo" | "user" | "system" | "admin";
 export type SkillSourceKind = "host";
 

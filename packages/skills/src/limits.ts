@@ -1,4 +1,9 @@
-/** 技能系统的限额常量与字节安全截断工具。 */
+/**
+ * 技能系统的限额常量与工具函数。
+ *
+ * 集中维护设计文档定义的硬上限，避免魔法数字散落各处；
+ * truncateUtf8 按 UTF-8 字节数截断，不切碎多字节字符。
+ */
 export const MAX_SKILL_NAME_CHARS = 64;
 export const MAX_DESCRIPTION_CHARS = 1024;
 export const MAIN_PROMPT_BYTES = 8000;

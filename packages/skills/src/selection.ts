@@ -1,4 +1,9 @@
-/** 从输入中按 $mention 或路径显式选择技能。 */
+/**
+ * 显式技能选择。
+ *
+ * 识别 $name / [$name](path) 提及与结构化 skill 输入；
+ * 路径优先，纯名称仅在唯一匹配时生效，并按 id 去重。
+ */
 import type { SkillCatalogLike, SkillCatalogEntry, SkillInput } from "./types.ts";
 
 export const MENTION_PATTERN = /(?:\[)?\$([A-Za-z0-9_:-]+)(?:\]\(([^)]+)\))?/g;

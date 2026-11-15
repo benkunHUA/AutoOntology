@@ -1,4 +1,9 @@
-/** 解析 agents/openai.yaml 的技能策略。 */
+/**
+ * agents/openai.yaml 策略解析器。
+ *
+ * 提取 allow-implicit-invocation 与 products 限制；
+ * 文件缺失或解析失败时回退到 DEFAULT_POLICY。
+ */
 export interface SkillPolicy {
   allowImplicitInvocation: boolean;
   products: string[];

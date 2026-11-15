@@ -1,4 +1,10 @@
-/** 解析 SKILL.md 的 YAML frontmatter。 */
+/**
+ * SKILL.md frontmatter 解析器。
+ *
+ * 提取 name / description / short-description，执行 name 与
+ * description 必填校验，并将 name 截断到 64 字符；
+ * 解析失败抛 FrontmatterError，由发现层记录为 warning。
+ */
 import { MAX_SKILL_NAME_CHARS } from "./limits.ts";
 
 export interface SkillFrontmatter {
