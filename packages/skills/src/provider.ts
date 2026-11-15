@@ -18,7 +18,6 @@ import type {
 
 export interface HostSkillProviderOptions {
   roots: SkillRoot[];
-  product?: string;
   disabledPaths?: ReadonlySet<string>;
   disabledNames?: ReadonlySet<string>;
 }
@@ -29,7 +28,6 @@ export class HostSkillProvider {
   async list(): Promise<SkillCatalog> {
     const outcome = await discoverSkills({
       roots: this.options.roots,
-      product: this.options.product,
       disabledPaths: this.options.disabledPaths,
       disabledNames: this.options.disabledNames,
     });

@@ -24,7 +24,6 @@ import type {
 
 export interface SkillRuntimeOptions {
   rootResolver?: (ctx: RootResolverContext) => SkillRoot[];
-  product?: string;
   includeInstructions?: boolean;
   catalogBudgetChars?: number;
   omitDescriptions?: boolean;
@@ -38,26 +37,19 @@ export class SkillRuntime {
 
   constructor(private readonly options: SkillRuntimeOptions = {}) {}
 
-  get product(): string | undefined {
-    return this.options.product;
-  }
-
   get currentStep(): SkillStepState | null {
     return this.stepState;
   }
 
   async prepareStep(input: {
     cwd: string;
-    product?: string;
   }): Promise<SkillStepState> {
-    const product = input.product ?? this.options.product;
     const roots = this.options.rootResolver
       ? this.options.rootResolver({ cwd: input.cwd })
       : resolveSkillRoots({ cwd: input.cwd });
 
     const host = new HostSkillProvider({
       roots,
-      product,
       disabledPaths: this.options.disabledPaths,
       disabledNames: this.options.disabledNames,
     });

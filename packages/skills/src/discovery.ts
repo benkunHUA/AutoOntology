@@ -1,7 +1,7 @@
 /**
  * 技能发现。
  *
- * 限深遍历 SKILL.md，解析元数据与策略，执行 product / 禁用过滤、
+ * 限深遍历 SKILL.md，解析元数据，执行禁用过滤、
  * canonical 去重与稳定排序；扫描超限或解析失败产生 warning 而不中断。
  */
 import { readdir, readFile, realpath } from "node:fs/promises";
@@ -11,7 +11,6 @@ import {
   MAX_ENTRIES_PER_ROOT,
   MAX_SCAN_DEPTH,
 } from "./limits.ts";
-import { DEFAULT_POLICY, parseAgentPolicy } from "./policy.ts";
 import { parseFrontmatter } from "./frontmatter.ts";
 import type {
   SkillLoadOutcome,
@@ -79,7 +78,6 @@ function compareSkills(a: SkillMetadata, b: SkillMetadata): number {
 
 export interface DiscoverOptions {
   roots: SkillRoot[];
-  product?: string;
   disabledPaths?: ReadonlySet<string>;
   disabledNames?: ReadonlySet<string>;
 }
@@ -102,18 +100,9 @@ export async function discoverSkills(
         const markdown = await readFile(canonical, "utf8");
         const meta = parseFrontmatter(markdown, basename(dirname(canonical)));
         if (disabledNames.has(meta.name)) continue;
-        const policy = await readAgentPolicy(dirname(canonical));
-        if (
-          policy.products.length &&
-          options.product &&
-          !policy.products.includes(options.product)
-        ) {
-          continue;
-        }
         seen.add(canonical);
         skills.push({
           ...meta,
-          ...policy,
           pathToSkillMd: canonical,
           scope: root.scope,
         });
@@ -135,17 +124,6 @@ export async function discoverSkills(
   skills.sort(compareSkills);
   return { skills, warnings };
 }
-
-async function readAgentPolicy(skillDir: string) {
-  try {
-    return parseAgentPolicy(
-      await readFile(join(skillDir, "agents", "openai.yaml"), "utf8"),
-    );
-  } catch {
-    return DEFAULT_POLICY;
-  }
-}
-
 async function canonicalizePaths(
   paths: ReadonlySet<string> | undefined,
 ): Promise<Set<string>> {

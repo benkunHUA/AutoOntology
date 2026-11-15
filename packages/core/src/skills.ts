@@ -8,7 +8,6 @@ import type { TurnContext } from "./turn-context.ts";
 export interface SkillsOptions {
   enabled?: boolean;
   roots?: readonly { path: string; scope?: SkillScope }[];
-  product?: string;
   includeInstructions?: boolean;
   catalogBudgetChars?: number;
   omitDescriptions?: boolean;
@@ -21,7 +20,6 @@ export function createSkillRuntime(
 ): SkillRuntime | null {
   if (!options || options.enabled === false) return null;
   return new SkillRuntime({
-    product: options.product,
     includeInstructions: options.includeInstructions,
     catalogBudgetChars: options.catalogBudgetChars,
     omitDescriptions: options.omitDescriptions,

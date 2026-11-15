@@ -35,7 +35,6 @@ async function main(): Promise<void> {
   const approval: ApprovalGate = createApprovalGate(useMock);
   const skills = {
     enabled: process.env.AO_SKILLS !== "0",
-    product: "codex",
   };
   const session = new Session({
     cwd,

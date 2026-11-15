@@ -44,26 +44,20 @@ describe("discoverSkills", () => {
     expect(outcome.warnings).toEqual([]);
   });
 
-  it("product 不匹配与禁用路径被过滤，非法 frontmatter 记为 warning", async () => {
+  it("禁用路径被过滤，非法 frontmatter 记为 warning", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ao-skills-"));
-    await mkdir(join(dir, "a", "agents"), { recursive: true });
+    await mkdir(join(dir, "a"), { recursive: true });
     await mkdir(join(dir, "b"), { recursive: true });
     await mkdir(join(dir, "bad"), { recursive: true });
     await writeFile(join(dir, "a", "SKILL.md"), SKILL("a"), "utf8");
-    await writeFile(
-      join(dir, "a", "agents", "openai.yaml"),
-      "products: [work]\n",
-      "utf8",
-    );
     await writeFile(join(dir, "b", "SKILL.md"), SKILL("b"), "utf8");
     await writeFile(join(dir, "bad", "SKILL.md"), "no frontmatter", "utf8");
 
     const outcome = await discoverSkills({
       roots: [{ path: dir, scope: "user" }],
-      product: "codex",
       disabledPaths: new Set([join(dir, "b", "SKILL.md")]),
     });
-    expect(outcome.skills.map((skill) => skill.name)).toEqual([]);
+    expect(outcome.skills.map((skill) => skill.name)).toEqual(["a"]);
     expect(outcome.warnings.length).toBe(1);
   });
 

@@ -13,8 +13,6 @@ export interface SkillMetadata {
   shortDescription?: string;
   pathToSkillMd: string;
   scope: SkillScope;
-  allowImplicitInvocation: boolean;
-  products: string[];
 }
 
 export interface SkillAuthority {
