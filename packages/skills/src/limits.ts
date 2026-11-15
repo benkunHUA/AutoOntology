@@ -1,3 +1,4 @@
+/** 技能系统的限额常量与字节安全截断工具。 */
 export const MAX_SKILL_NAME_CHARS = 64;
 export const MAX_DESCRIPTION_CHARS = 1024;
 export const MAIN_PROMPT_BYTES = 8000;

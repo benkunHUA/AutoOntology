@@ -1,3 +1,4 @@
+/** 技能运行时编排：准备目录、渲染目录、按需读取正文。 */
 import {
   DEFAULT_CATALOG_BUDGET_CHARS,
   MAIN_PROMPT_BYTES,

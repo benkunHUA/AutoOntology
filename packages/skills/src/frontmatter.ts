@@ -1,3 +1,4 @@
+/** 解析 SKILL.md 的 YAML frontmatter。 */
 import { MAX_SKILL_NAME_CHARS } from "./limits.ts";
 
 export interface SkillFrontmatter {

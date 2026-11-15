@@ -1,3 +1,4 @@
+/** @ao/skills 包的公共导出。 */
 export * from "./types.ts";
 export * from "./limits.ts";
 export * from "./frontmatter.ts";

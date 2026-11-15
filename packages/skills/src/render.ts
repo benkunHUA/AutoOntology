@@ -1,3 +1,4 @@
+/** 渲染可用技能目录，按预算降级并截断。 */
 import {
   DEFAULT_CATALOG_BUDGET_CHARS,
   MAX_DESCRIPTION_CHARS,

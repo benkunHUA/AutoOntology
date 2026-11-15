@@ -1,3 +1,4 @@
+/** 技能目录集合：去重、合并与可见性过滤。 */
 import type { SkillCatalogLike, SkillCatalogEntry } from "./types.ts";
 
 export class SkillCatalog implements SkillCatalogLike {

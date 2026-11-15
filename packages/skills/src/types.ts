@@ -1,3 +1,4 @@
+/** 技能系统领域模型与接口。 */
 export type SkillScope = "repo" | "user" | "system" | "admin";
 export type SkillSourceKind = "host";
 

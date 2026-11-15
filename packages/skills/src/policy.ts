@@ -1,3 +1,4 @@
+/** 解析 agents/openai.yaml 的技能策略。 */
 export interface SkillPolicy {
   allowImplicitInvocation: boolean;
   products: string[];

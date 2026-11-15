@@ -1,3 +1,4 @@
+/** 遍历并发现 SKILL.md，解析元数据、过滤、去重与稳定排序。 */
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {

@@ -1,3 +1,4 @@
+/** skills.list 与 skills.read 工具。 */
 import type { ToolHandler, ToolResult } from "@ao/protocol";
 import { SKILLS_LIST_PAGE_SIZE, TOOL_RESPONSE_BYTES } from "./limits.ts";
 import type { SkillRuntime } from "./runtime.ts";

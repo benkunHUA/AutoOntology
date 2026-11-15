@@ -1,3 +1,4 @@
+/** 从输入中按 $mention 或路径显式选择技能。 */
 import type { SkillCatalogLike, SkillCatalogEntry, SkillInput } from "./types.ts";
 
 export const MENTION_PATTERN = /(?:\[)?\$([A-Za-z0-9_:-]+)(?:\]\(([^)]+)\))?/g;

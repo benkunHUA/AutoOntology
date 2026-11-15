@@ -1,3 +1,4 @@
+/** 基于本地文件系统的技能 Provider。 */
 import { isUtf8 } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { SkillCatalog } from "./catalog.ts";

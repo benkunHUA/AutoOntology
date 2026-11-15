@@ -1,3 +1,4 @@
+/** 解析技能根目录；当前只返回 cwd/.ontology/skills。 */
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { SkillRoot } from "./types.ts";
