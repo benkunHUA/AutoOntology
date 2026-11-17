@@ -7,3 +7,4 @@ coverage/
 .ao/
 docs/
 demo/
+ao.config.json

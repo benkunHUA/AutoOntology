@@ -23,7 +23,10 @@ import { newSessionId, newThreadId } from "@ao/protocol";
 import { ContextManager } from "./context-manager.ts";
 import { InputQueue } from "./input-queue.ts";
 import type { AgentHooks } from "./hooks.ts";
-import type { JsonlPersistence } from "./persistence.ts";
+import {
+  JsonlPersistence,
+  threadPersistencePath,
+} from "./persistence.ts";
 import type { TurnContext } from "./turn-context.ts";
 import type { TurnResult } from "./turn.ts";
 import { AbortedError } from "./errors.ts";
@@ -54,6 +57,7 @@ export interface SessionOptions {
   emit: EventSink;
   hooks?: AgentHooks;
   persistence?: JsonlPersistence;
+  persistenceDir?: string;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
   skills?: SkillsOptions;
@@ -86,6 +90,7 @@ export class Session {
   private readonly options: SessionOptions;
   private readonly router: ToolRouter;
   private readonly skillRuntime: SkillRuntime | null;
+  private readonly persistence: JsonlPersistence | undefined;
   private active: ActiveTurn | null = null;
   private turnSeq = 0;
   private idleWaiters: Array<() => void> = [];
@@ -94,20 +99,22 @@ export class Session {
   constructor(options: SessionOptions) {
     this.options = options;
     const threadId = options.identity?.threadId ?? newThreadId();
+    const { sessionId, rootThreadId, parentThreadId, forkedFromThreadId } = options.identity ?? {};
     this.identity = Object.freeze({
       threadId,
-      sessionId: options.identity?.sessionId ?? newSessionId(),
-      rootThreadId: options.identity?.rootThreadId ?? options.identity?.sessionId ?? threadId,
-      parentThreadId: options.identity?.parentThreadId,
-      forkedFromThreadId: options.identity?.forkedFromThreadId,
+      sessionId: sessionId ?? newSessionId(),
+      rootThreadId: rootThreadId ?? sessionId ?? threadId,
+      parentThreadId,
+      forkedFromThreadId,
     });
+    this.persistence = createPersistence(options, this.identity);
     this.skillRuntime = createSkillRuntime(options.skills);
     this.router = new ToolRouter([
       ...options.handlers,
       ...(this.skillRuntime ? createSkillToolHandlers(this.skillRuntime) : []),
     ]);
     this.history = new ContextManager({
-      onAppend: (item) => options.persistence?.append(item),
+      onAppend: (item) => this.persistence?.append(item),
     });
   }
 
@@ -261,7 +268,7 @@ export class Session {
     }
 
     // 4. 先落盘，再发终止事件
-    await this.options.persistence?.flush();
+    await this.persistence?.flush();
 
     if (outcome === "completed") {
       this.emit({
@@ -342,4 +349,19 @@ export class Session {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createPersistence(
+  options: SessionOptions,
+  identity: ThreadIdentity,
+): JsonlPersistence | undefined {
+  if (options.persistence) return options.persistence;
+  if (!options.persistenceDir) return undefined;
+  return new JsonlPersistence(
+    threadPersistencePath(
+      options.persistenceDir,
+      identity.sessionId,
+      identity.threadId,
+    ),
+  );
 }

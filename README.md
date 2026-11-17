@@ -13,11 +13,23 @@ pnpm install
 # 离线体验（内置 mock 模型，无需密钥）：
 pnpm cli:mock
 
-# 对接真实模型（OpenAI Responses API）：
-export OPENAI_API_KEY=sk-...
-export AO_MODEL=gpt-5-codex        # 可选
+# 对接真实模型：先配置 ao.config.json，再运行
 pnpm cli
 ```
+
+在项目根目录创建 `ao.config.json`（已加入 `.gitignore`）：
+
+```json
+{
+  "api_key": "sk-...",
+  "model_name": "gpt-5-codex",
+  "base_url": "https://api.openai.com/v1",
+  "approval": "auto",
+  "skills": true
+}
+```
+
+可用 `--config <path>` 指定配置文件；`approval` 可设为 `auto` 或 `deny`，`skills` 可设为 `true` 或 `false`。
 
 REPL 操作：直接输入即提交；回合进行中输入会自动「插话」；
 `/abort` 中断当前回合；`/quit` 退出。会话历史以 JSONL 追加写入 `.ao/sessions/`。
@@ -26,11 +38,11 @@ REPL 操作：直接输入即提交；回合进行中输入会自动「插话」
 
 Skill 是可发现、按需加载的指令包：系统扫描目录中的 `SKILL.md`，把可用技能
 目录注入模型上下文；输入 `$skill-name` 会按需读取并注入对应正文。可用工具：
-`skills.list` 与 `skills.read`。
+`skills_list` 与 `skills_read`。
 
 - 默认扫描根：`<cwd>/.ontology/skills`。
 - `SKILL.md` 需要 YAML frontmatter（`name`、`description`，可选 `short-description`）。
-- 产品过滤默认 `codex`；设置 `AO_SKILLS=0` 可关闭技能注入。
+- 产品过滤默认 `codex`；在 `ao.config.json` 中设置 `"skills": false` 可关闭技能注入。
 
 ## 工程结构
 

@@ -5,7 +5,7 @@
  * 写入串行化：所有 append 进入同一条 promise 链，保证行序即历史序。
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import type { HistoryItem } from "@ao/protocol";
 
 export class JsonlPersistence {
@@ -45,4 +45,13 @@ export class JsonlPersistence {
   close(): void {
     this.closed = true;
   }
+}
+
+/** 按 sessionId/threadId 生成追加式 JSONL 路径。 */
+export function threadPersistencePath(
+  rootDir: string,
+  sessionId: string,
+  threadId: string,
+): string {
+  return join(rootDir, sessionId, `${threadId}.jsonl`);
 }

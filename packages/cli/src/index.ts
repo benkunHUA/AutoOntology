@@ -10,44 +10,56 @@
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { MockModelClient, ResponsesClient } from "@ao/api";
-import { JsonlPersistence, Thread } from "@ao/core";
+import { Thread } from "@ao/core";
 import type { ApprovalGate, ModelClient } from "@ao/protocol";
 import { defaultTools } from "@ao/tools";
 import { createRenderer } from "./render.ts";
+import {
+  loadConfigFile,
+  resolveConfig,
+  type AppConfig,
+} from "./config.ts";
 
 const SYSTEM_INSTRUCTIONS = [
   "You are a coding agent working in the user's workspace.",
   "Use the provided tools to inspect and modify files, and to run commands.",
   "Work incrementally: take one step, observe the result, then continue.",
+  "If a command fails, do not retry the same command more than once; read the error and switch to a simpler or platform-compatible approach.",
+  "On macOS, avoid `timeout`; prefer Node/Python checks and the project's own typecheck/tests before launching GUI browsers or installing packages.",
   "When the task is done, reply with a short summary of what you did.",
 ].join("\n");
 
 async function main(): Promise<void> {
-  const args = new Set(process.argv.slice(2));
-  const useMock = args.has("--mock");
+  const argv = process.argv.slice(2);
+  const useMock = argv.includes("--mock");
+  const configArgIndex = argv.indexOf("--config");
+  const configPath =
+    configArgIndex >= 0 ? argv[configArgIndex + 1] : undefined;
   const cwd = resolve(process.cwd());
+  const config = resolveConfig(await loadConfigFile(cwd, configPath));
 
   const client: ModelClient = useMock
     ? new MockModelClient()
-    : createResponsesClient();
+    : createResponsesClient(config);
 
   const renderer = createRenderer();
-  const approval: ApprovalGate = createApprovalGate(useMock);
+  const approval: ApprovalGate = createApprovalGate(
+    useMock,
+    config.approval ?? (useMock ? "auto" : "deny"),
+  );
   const skills = {
-    enabled: process.env.AO_SKILLS !== "0",
+    enabled: config.skills,
   };
   const thread = new Thread({
     cwd,
-    model: useMock ? "mock" : (process.env.AO_MODEL ?? "deepseek-flash"),
+    model: useMock ? "mock" : config.modelName,
     instructions: SYSTEM_INSTRUCTIONS,
     client,
     handlers: defaultTools(),
     approval,
     skills,
     emit: (event) => renderer.render(event),
-    persistence: new JsonlPersistence(
-      resolve(cwd, ".ao", "sessions", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`),
-    ),
+    persistenceDir: resolve(cwd, ".ao", "sessions"),
   });
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -90,12 +102,11 @@ async function main(): Promise<void> {
   await thread.abort("user");
   await thread.whenIdle();
   await new Promise((r) => setTimeout(r, 50)); // 等渲染器 flush
-  process.stdout.write(`\n会话历史已保存到 ${cwd}/.ao/sessions/\n`);
+  process.stdout.write(`\n会话历史已保存到 ${cwd}/.ao/sessions/${thread.sessionId}/${thread.threadId}.jsonl\n`);
   process.exit(0);
 }
 
-function createApprovalGate(useMock: boolean): ApprovalGate {
-  const mode = process.env.AO_APPROVAL ?? (useMock ? "auto" : "deny");
+function createApprovalGate(_useMock: boolean, mode: "auto" | "deny"): ApprovalGate {
   return {
     async request(request) {
       process.stderr.write(`[approval] ${request.action}\n`);
@@ -105,17 +116,16 @@ function createApprovalGate(useMock: boolean): ApprovalGate {
   };
 }
 
-function createResponsesClient(): ResponsesClient {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+function createResponsesClient(config: AppConfig): ResponsesClient {
+  if (!config.apiKey) {
     process.stderr.write(
-      "缺少 OPENAI_API_KEY。离线体验请运行：pnpm cli:mock\n",
+      "缺少 api_key。请在 ao.config.json 中设置，或设置 OPENAI_API_KEY；离线体验请运行：pnpm cli:mock\n",
     );
     process.exit(1);
   }
   return new ResponsesClient({
-    apiKey,
-    baseUrl: process.env.OPENAI_BASE_URL,
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
   });
 }
 

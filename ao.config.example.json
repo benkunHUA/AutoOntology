@@ -1,0 +1,7 @@
+{
+  "api_key": "",
+  "model_name": "gpt-5-codex",
+  "base_url": "https://api.openai.com/v1",
+  "approval": "auto",
+  "skills": true
+}

@@ -1,5 +1,5 @@
 /**
- * skills.list 与 skills.read 工具。
+ * skills_list 与 skills_read 工具。
  *
  * 暴露给模型的只读工具，分别支持 20 条与 512 KiB 分页。
  */
@@ -14,7 +14,7 @@ export function createSkillTools(runtime: SkillRuntime): ToolHandler[] {
 function listSkills(runtime: SkillRuntime): ToolHandler {
   return {
     spec: {
-      name: "skills.list",
+      name: "skills_list",
       description: "List available skills, with pagination.",
       parameters: {
         type: "object",
@@ -58,7 +58,7 @@ function listSkills(runtime: SkillRuntime): ToolHandler {
 function readSkill(runtime: SkillRuntime): ToolHandler {
   return {
     spec: {
-      name: "skills.read",
+      name: "skills_read",
       description: "Read a skill resource by package id, with pagination.",
       parameters: {
         type: "object",

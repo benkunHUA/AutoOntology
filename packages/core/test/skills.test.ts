@@ -82,8 +82,8 @@ describe("技能注入", () => {
           item.text.includes("Demo body"),
       ),
     ).toBe(true);
-    expect(captured.tools).toContain("skills.list");
-    expect(captured.tools).toContain("skills.read");
+    expect(captured.tools).toContain("skills_list");
+    expect(captured.tools).toContain("skills_read");
   });
 
   it("禁用技能时不注入目录、不注册工具", async () => {
@@ -107,6 +107,6 @@ describe("技能注入", () => {
           item.type === "message" && item.text.includes("Available skills"),
       ),
     ).toBe(false);
-    expect(captured.tools).not.toContain("skills.list");
+    expect(captured.tools).not.toContain("skills_list");
   });
 });

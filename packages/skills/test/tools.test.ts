@@ -32,11 +32,11 @@ async function runtimeWith(count: number): Promise<SkillRuntime> {
 }
 
 describe("createSkillTools", () => {
-  it("skills.list 分页且 nextCursor 正确", async () => {
+  it("skills_list 分页且 nextCursor 正确", async () => {
     const runtime = await runtimeWith(25);
     await runtime.prepareStep({ cwd: "/tmp" });
     const tools = createSkillTools(runtime);
-    const list = tools.find((tool) => tool.spec.name === "skills.list")!;
+    const list = tools.find((tool) => tool.spec.name === "skills_list")!;
     const result = await list.execute({}, ctx());
     expect(result.ok).toBe(true);
     const page = JSON.parse(result.output);
@@ -44,11 +44,11 @@ describe("createSkillTools", () => {
     expect(page.nextCursor).toBe("20");
   });
 
-  it("skills.read 读取主 prompt 并分页", async () => {
+  it("skills_read 读取主 prompt 并分页", async () => {
     const runtime = await runtimeWith(1);
     await runtime.prepareStep({ cwd: "/tmp" });
     const tools = createSkillTools(runtime);
-    const read = tools.find((tool) => tool.spec.name === "skills.read")!;
+    const read = tools.find((tool) => tool.spec.name === "skills_read")!;
 
     const missing = await read.execute({ package: "skill://" }, ctx());
     expect(missing.ok).toBe(false);
@@ -62,7 +62,7 @@ describe("createSkillTools", () => {
   it("未准备时返回错误", async () => {
     const runtime = await runtimeWith(0);
     const tools = createSkillTools(runtime);
-    const list = tools.find((tool) => tool.spec.name === "skills.list")!;
+    const list = tools.find((tool) => tool.spec.name === "skills_list")!;
     const result = await list.execute({}, ctx());
     expect(result.ok).toBe(false);
   });
