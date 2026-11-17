@@ -15,10 +15,11 @@ import type {
   ModelClient,
   SandboxManager,
   SessionEvent,
+  ThreadIdentity,
   ToolHandler,
 } from "@ao/protocol";
 import type { SkillRuntime } from "@ao/skills";
-import { message } from "@ao/protocol";
+import { newSessionId, newThreadId } from "@ao/protocol";
 import { ContextManager } from "./context-manager.ts";
 import { InputQueue } from "./input-queue.ts";
 import type { AgentHooks } from "./hooks.ts";
@@ -35,8 +36,13 @@ import {
   type SkillsOptions,
 } from "./skills.ts";
 import { ToolRouter } from "./tools/router.ts";
+import { WorldStateManager } from "./world-state.ts";
 
-export type SubmissionMode = "start-or-steer" | "start-if-idle" | "steer";
+export type SubmissionMode =
+  | "start-or-steer"
+  | "start-if-idle"
+  | "continue-if-idle"
+  | "steer";
 export type SubmitResult = "started" | "steered" | "rejected";
 
 export interface SessionOptions {
@@ -51,6 +57,7 @@ export interface SessionOptions {
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
   skills?: SkillsOptions;
+  identity?: ThreadIdentity;
 }
 
 interface TurnStats {
@@ -73,6 +80,8 @@ const GRACE_MS = 100;
 export class Session {
   readonly history: ContextManager;
   readonly inputQueue = new InputQueue();
+  readonly worldState = new WorldStateManager();
+  readonly identity: ThreadIdentity;
 
   private readonly options: SessionOptions;
   private readonly router: ToolRouter;
@@ -80,9 +89,18 @@ export class Session {
   private active: ActiveTurn | null = null;
   private turnSeq = 0;
   private idleWaiters: Array<() => void> = [];
+  private submissionTail: Promise<void> = Promise.resolve();
 
   constructor(options: SessionOptions) {
     this.options = options;
+    const threadId = options.identity?.threadId ?? newThreadId();
+    this.identity = Object.freeze({
+      threadId,
+      sessionId: options.identity?.sessionId ?? newSessionId(),
+      rootThreadId: options.identity?.rootThreadId ?? options.identity?.sessionId ?? threadId,
+      parentThreadId: options.identity?.parentThreadId,
+      forkedFromThreadId: options.identity?.forkedFromThreadId,
+    });
     this.skillRuntime = createSkillRuntime(options.skills);
     this.router = new ToolRouter([
       ...options.handlers,
@@ -97,19 +115,29 @@ export class Session {
     return this.active !== null;
   }
 
+  get threadId(): string {
+    return this.identity.threadId;
+  }
+
+  get sessionId(): string {
+    return this.identity.sessionId;
+  }
+
   /**
-   * 唯一的串行提交入口。同步完成状态判定（不能在内部 await）。
+   * 唯一的串行提交入口。提交按到达顺序串行处理，避免并发写状态。
    */
-  submit(text: string, mode: SubmissionMode = "start-or-steer"): SubmitResult {
-    if (this.active) {
-      if (mode === "start-if-idle") return "rejected";
-      // start-or-steer / steer：插话进入待处理队列，步骤边界消费
-      this.inputQueue.push(text);
-      return "steered";
-    }
-    if (mode === "steer") return "rejected";
-    this.startTurn(text);
-    return "started";
+  async submit(
+    text: string,
+    mode: SubmissionMode = "start-or-steer",
+  ): Promise<SubmitResult> {
+    let outcome: SubmitResult = "rejected";
+    const operation = this.submissionTail.then(() => {
+      outcome = this.dispatchSubmission(text, mode);
+    });
+    // 后续提交继续排在本操作之后，单次失败不阻断队列。
+    this.submissionTail = operation.catch(() => {});
+    await operation;
+    return outcome;
   }
 
   /**
@@ -138,6 +166,8 @@ export class Session {
     const turnId = `turn_${++this.turnSeq}`;
     const startedAt = Date.now();
     const context: TurnContext = Object.freeze({
+      threadId: this.identity.threadId,
+      sessionId: this.identity.sessionId,
       turnId,
       cwd: this.options.cwd,
       model: this.options.model,
@@ -147,7 +177,6 @@ export class Session {
     const controller = new AbortController();
 
     this.emit({ type: "turn_started", turnId, at: new Date().toISOString() });
-    this.history.append(message("user", text));
 
     const active: ActiveTurn = {
       context,
@@ -166,6 +195,7 @@ export class Session {
     try {
       const result = await active.task.run({
         turn: active.context,
+        initialText,
         history: this.history,
         inputQueue: this.inputQueue,
         client: this.options.client,
@@ -173,10 +203,11 @@ export class Session {
         emit: (event) => this.emitForTurn(event, active),
         hooks: this.options.hooks,
         signal: active.controller.signal,
+        worldState: this.worldState,
         approval: this.options.approval,
         sandbox: this.options.sandbox,
         skills: this.skillRuntime
-          ? { runtime: this.skillRuntime, initialText }
+          ? { runtime: this.skillRuntime }
           : undefined,
       });
       this.pendingResult = result;
@@ -207,12 +238,6 @@ export class Session {
       this.history.backfillMissingToolOutputs("turn aborted");
     } else if (outcome === "error") {
       this.history.backfillMissingToolOutputs("turn errored");
-    }
-
-    // 3. 剩余输入与中断标记在回填之后落账，不能夹在 call 与 output 之间。
-    const remaining = this.inputQueue.drain();
-    for (const pending of remaining) {
-      this.history.append(message("user", pending.text));
     }
 
     if (outcome === "aborted") {
@@ -268,7 +293,7 @@ export class Session {
     // 4. 清空活跃任务，置空闲；有待处理输入则立即开下一单
     this.active = null;
     if (this.inputQueue.hasPending()) {
-      const next = this.inputQueue.drain()[0];
+      const next = this.inputQueue.takeFirst();
       if (next) this.startTurn(next.text);
       return;
     }
@@ -289,6 +314,29 @@ export class Session {
 
   private emit(event: SessionEvent): void {
     this.options.emit(event);
+  }
+
+  private dispatchSubmission(
+    text: string,
+    mode: SubmissionMode,
+  ): SubmitResult {
+    if (this.active) {
+      const active = this.active;
+      if (mode === "start-if-idle") return "rejected";
+      if (mode === "steer") {
+        if (active.task.kind !== "regular") return "rejected";
+        this.inputQueue.push(text);
+        return "steered";
+      }
+      // start-or-steer：仅普通回合可插话，评审/压缩回合拒绝。
+      if (active.task.kind !== "regular") return "rejected";
+      this.inputQueue.push(text);
+      return "steered";
+    }
+    if (mode === "steer") return "rejected";
+    // continue-if-idle 用于内部续接，行为等同空闲时开新单。
+    this.startTurn(text);
+    return "started";
   }
 }
 

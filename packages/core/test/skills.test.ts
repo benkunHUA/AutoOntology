@@ -62,7 +62,7 @@ describe("技能注入", () => {
       emit: () => {},
       skills: { roots: [{ path: root, scope: "user" }] },
     });
-    session.submit("use $demo now");
+    await session.submit("use $demo now");
     await session.whenIdle();
 
     const developer = captured.input?.filter(
@@ -98,7 +98,7 @@ describe("技能注入", () => {
       emit: () => {},
       skills: { enabled: false, roots: [{ path: root, scope: "user" }] },
     });
-    session.submit("use $demo now");
+    await session.submit("use $demo now");
     await session.whenIdle();
 
     expect(

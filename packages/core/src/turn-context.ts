@@ -3,6 +3,8 @@
  * 构造后不可变；步骤级快照见 StepContext。
  */
 export interface TurnContext {
+  readonly threadId: string;
+  readonly sessionId: string;
   readonly turnId: string;
   readonly cwd: string;
   readonly model: string;

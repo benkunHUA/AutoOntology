@@ -26,8 +26,12 @@ import type { ToolRouter } from "./tools/router.ts";
 import { ToolOrchestrator } from "./tools/orchestrator.ts";
 import { createSandboxManager } from "./tools/sandbox.ts";
 import { ToolCallRuntime } from "./tools/runtime.ts";
-import { shouldCompact } from "./compaction.ts";
+import { shouldCompact, SummaryCompactor } from "./compaction.ts";
 import { injectSkillMentions, prepareTurnSkills } from "./skills.ts";
+import {
+  defaultWorldStateContributors,
+  type WorldStateManager,
+} from "./world-state.ts";
 import { streamWithRetry } from "@ao/api";
 import type {
   ApprovalGate,
@@ -42,6 +46,8 @@ import { functionCallOutput, message } from "@ao/protocol";
 
 export interface RunTurnDeps {
   turn: TurnContext;
+  /** 本回合的首个用户输入；未落账，需经输入审查后再写入历史。 */
+  initialText: string;
   history: ContextManager;
   inputQueue: InputQueue;
   client: ModelClient;
@@ -49,9 +55,10 @@ export interface RunTurnDeps {
   emit: EventSink;
   hooks?: AgentHooks;
   signal: AbortSignal;
+  worldState: WorldStateManager;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
-  skills?: { runtime: SkillRuntime; initialText: string };
+  skills?: { runtime: SkillRuntime };
 }
 
 export interface TurnResult {
@@ -60,12 +67,40 @@ export interface TurnResult {
 }
 
 export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
-  const { turn, history, inputQueue, client, router, emit, hooks, signal } = deps;
+  const {
+    turn,
+    initialText,
+    history,
+    inputQueue,
+    client,
+    router,
+    emit,
+    hooks,
+    signal,
+    worldState,
+  } = deps;
+
+  const compactor = new SummaryCompactor(client, turn.model);
+
+  // ── 开火前压缩：先于新输入落账 ─────────────────────────────
+  if (shouldCompact(history)) {
+    const outcome = await compactor.compact(history, { signal });
+    if (outcome.compacted) worldState.resetBaseline();
+  }
+
+  const initialInput = { text: initialText, at: new Date(turn.startedAt).toISOString() };
+  const reviewedInitial = hooks?.reviewInput
+    ? await hooks.reviewInput(initialInput, turn)
+    : initialText;
+  if (reviewedInitial !== null) {
+    history.append(message("user", reviewedInitial));
+  }
+
   const preparedSkills = await prepareTurnSkills(
     deps.skills?.runtime ?? null,
     turn,
     history,
-    deps.skills?.initialText ?? "",
+    reviewedInitial ?? "",
   );
   const orchestrator = new ToolOrchestrator({
     approval: deps.approval,
@@ -100,15 +135,15 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       }
     }
 
-    // ── 开火前压缩体检：压缩先于新输入落账，目前只做判定告警 ──
+    // ── 回合中压缩：继续前检查是否超限 ─────────────────────────
     if (shouldCompact(history)) {
-      console.warn(
-        `[core] context ~${history.estimateTokens()} tokens, compaction pending`,
-      );
+      const outcome = await compactor.compact(history, { signal });
+      if (outcome.compacted) worldState.resetBaseline();
     }
 
     // ── 步骤快照：本步的工具表、环境、取消信号 ─────────────────────
     const step = captureStepContext({
+      turn,
       cwd: turn.cwd,
       signal,
       router,
@@ -117,6 +152,13 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     });
     const runtime = new ToolCallRuntime(step, router, orchestrator, emit, hooks);
     const stepToolCalls: FunctionCallItem[] = [];
+
+    // ── 世界状态：首次全量，之后只注入差异 ─────────────────────
+    await worldState.inject(
+      history,
+      defaultWorldStateContributors(),
+      { cwd: step.cwd, tools: router.modelVisibleSpecs() },
+    );
 
     // ── 采样：重试循环包住事件循环 ────────────────────────────────
     let needsContinue = false;
@@ -135,49 +177,54 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       { onAttemptStart: () => {} },
     );
 
-    for await (const event of events) {
-      throwIfAborted(signal);
-      switch (event.type) {
-        case "item_started":
-          emit({ type: "item_started", index: event.index });
-          break;
+    let streamError: unknown = null;
+    try {
+      for await (const event of events) {
+        throwIfAborted(signal);
+        switch (event.type) {
+          case "item_started":
+            emit({ type: "item_started", index: event.index });
+            break;
 
-        case "text_delta":
-          stepText += event.delta;
-          emit({ type: "text_delta", delta: event.delta });
-          break;
+          case "text_delta":
+            stepText += event.delta;
+            emit({ type: "text_delta", delta: event.delta });
+            break;
 
-        case "reasoning_delta":
-          emit({ type: "reasoning_delta", delta: event.delta });
-          break;
+          case "reasoning_delta":
+            emit({ type: "reasoning_delta", delta: event.delta });
+            break;
 
-        case "item_done": {
-          const item: HistoryItem = event.item;
-          history.append(item);
-          if (item.type === "function_call") {
-            // 先记账（append 已完成）→ 立即派发（并行门）
-            stepToolCalls.push(item);
-            toolCalls++;
-            runtime.dispatch(item);
-          } else if (item.type === "message" && item.role === "assistant") {
-            finalMessage = item.text;
+          case "item_done": {
+            const item: HistoryItem = event.item;
+            history.append(item);
+            if (item.type === "function_call") {
+              // 先记账（append 已完成）→ 立即派发（并行门）
+              stepToolCalls.push(item);
+              toolCalls++;
+              runtime.dispatch(item);
+            } else if (item.type === "message" && item.role === "assistant") {
+              finalMessage = item.text;
+            }
+            break;
           }
-          break;
+
+          case "response_completed":
+            needsContinue = event.needsContinue;
+            if (event.usage) {
+              usage = {
+                inputTokens: usage.inputTokens + event.usage.inputTokens,
+                outputTokens: usage.outputTokens + event.usage.outputTokens,
+              };
+            }
+            break;
+
+          case "error":
+            throw new TurnError(event.message);
         }
-
-        case "response_completed":
-          needsContinue = event.needsContinue;
-          if (event.usage) {
-            usage = {
-              inputTokens: usage.inputTokens + event.usage.inputTokens,
-              outputTokens: usage.outputTokens + event.usage.outputTokens,
-            };
-          }
-          break;
-
-        case "error":
-          throw new TurnError(event.message);
       }
+    } catch (error) {
+      streamError = error;
     }
 
     // ── 流结束：等在途工具，按调用顺序串行回填 ────────────────
@@ -185,12 +232,22 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     for (const { call, result } of collected) {
       history.append(functionCallOutput(call.callId, result.output, result.ok));
     }
+    if (streamError !== null) throw streamError;
 
     // ── 是否继续：只有三个输入，不做文本语义判断 ────────────────────
     const shouldContinue =
       stepToolCalls.length > 0 || needsContinue || inputQueue.hasPending();
 
     if (!shouldContinue) {
+      // ── 收尾压缩：失败只警告，保留已完成答复 ────────────────
+      if (shouldCompact(history)) {
+        try {
+          const outcome = await compactor.compact(history, { signal });
+          if (outcome.compacted) worldState.resetBaseline();
+        } catch (error) {
+          console.warn(`[core] post-turn compaction failed: ${(error as Error).message}`);
+        }
+      }
       const summary: TurnSummary = {
         turnId: turn.turnId,
         finalMessage,

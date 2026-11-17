@@ -25,6 +25,11 @@ export class InputQueue {
     return drained;
   }
 
+  /** 只取队首，保留其余输入给下一个回合/步骤。 */
+  takeFirst(): PendingInput | undefined {
+    return this.items.shift();
+  }
+
   hasPending(): boolean {
     return this.items.length > 0;
   }

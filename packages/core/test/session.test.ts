@@ -69,30 +69,31 @@ describe("Session 中断收尾", () => {
       emit: () => {},
     });
 
-    session.submit("hello");
+    await session.submit("hello");
     await waitUntil(() =>
       session.history
         .serialize()
         .some((item) => item.type === "function_call" && item.callId === "call_1"),
     );
 
-    session.submit("interject");
     await session.abort("user");
     await session.whenIdle();
 
     const items = session.history.serialize();
     expect(items.map((item) => item.type)).toEqual([
       "message",
+      "message",
+      "message",
+      "message",
       "function_call",
       "function_call_output",
-      "message",
       "turn_marker",
     ]);
-    expect(items[2]).toMatchObject({
+    expect(items[5]).toMatchObject({
       type: "function_call_output",
       callId: "call_1",
       ok: false,
     });
-    expect(items[4]).toMatchObject({ type: "turn_marker", kind: "aborted" });
+    expect(items[6]).toMatchObject({ type: "turn_marker", kind: "aborted" });
   });
 });

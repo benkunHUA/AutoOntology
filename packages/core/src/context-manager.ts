@@ -27,6 +27,11 @@ export class ContextManager {
     return [...this.items];
   }
 
+  /** 压缩重写内存历史。持久化层仍保持追加语义，旧条目不回退。 */
+  replaceAll(items: HistoryItem[]): void {
+    this.items = [...items];
+  }
+
   get size(): number {
     return this.items.length;
   }

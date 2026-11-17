@@ -266,6 +266,16 @@ describe("ToolOrchestrator", () => {
 });
 
 describe("ToolCallRuntime", () => {
+  const testTurn = {
+    threadId: "thread_1",
+    sessionId: "session_1",
+    turnId: "turn_1",
+    cwd: "/tmp",
+    model: "test",
+    instructions: "",
+    startedAt: 0,
+  };
+
   it("默认路径重复 callId 不保证去重，执行两次且不崩溃", async () => {
     let executions = 0;
     const probe: ToolHandler = {
@@ -277,6 +287,7 @@ describe("ToolCallRuntime", () => {
     };
     const router = new ToolRouter([probe]);
     const step = captureStepContext({
+      turn: testTurn,
       cwd: "/tmp",
       signal: new AbortController().signal,
       router,
@@ -303,6 +314,7 @@ describe("ToolCallRuntime", () => {
     const router = new ToolRouter([noopHandler("known")]);
     const events: string[] = [];
     const step = captureStepContext({
+      turn: testTurn,
       cwd: "/tmp",
       signal: new AbortController().signal,
       router,
@@ -329,6 +341,7 @@ describe("ToolCallRuntime", () => {
     const router = new ToolRouter([slow]);
     const gate = new ReadWriteGate();
     const step = captureStepContext({
+      turn: testTurn,
       cwd: "/tmp",
       signal: new AbortController().signal,
       router,
@@ -363,6 +376,7 @@ describe("ToolCallRuntime", () => {
     };
     const router = new ToolRouter([mismatched]);
     const step = captureStepContext({
+      turn: testTurn,
       cwd: "/tmp",
       signal: new AbortController().signal,
       router,
@@ -397,6 +411,7 @@ describe("ToolCallRuntime", () => {
     const router = new ToolRouter([waiting]);
     const events: string[] = [];
     const step = captureStepContext({
+      turn: testTurn,
       cwd: "/tmp",
       signal: controller.signal,
       router,

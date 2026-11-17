@@ -10,7 +10,7 @@
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { MockModelClient, ResponsesClient } from "@ao/api";
-import { JsonlPersistence, Session } from "@ao/core";
+import { JsonlPersistence, Thread } from "@ao/core";
 import type { ApprovalGate, ModelClient } from "@ao/protocol";
 import { defaultTools } from "@ao/tools";
 import { createRenderer } from "./render.ts";
@@ -36,9 +36,9 @@ async function main(): Promise<void> {
   const skills = {
     enabled: process.env.AO_SKILLS !== "0",
   };
-  const session = new Session({
+  const thread = new Thread({
     cwd,
-    model: useMock ? "mock" : (process.env.AO_MODEL ?? "gpt-5-codex"),
+    model: useMock ? "mock" : (process.env.AO_MODEL ?? "deepseek-flash"),
     instructions: SYSTEM_INSTRUCTIONS,
     client,
     handlers: defaultTools(),
@@ -59,8 +59,8 @@ async function main(): Promise<void> {
 
   let quitting = false;
   process.on("SIGINT", async () => {
-    if (session.isBusy) {
-      await session.abort("user");
+    if (thread.isBusy) {
+      await thread.abort("user");
       return;
     }
     quitting = true;
@@ -76,19 +76,19 @@ async function main(): Promise<void> {
     if (text === "/quit") break;
 
     if (text === "/abort") {
-      if (!session.isBusy) process.stdout.write("（空闲中）\n");
-      else await session.abort("user");
+      if (!thread.isBusy) process.stdout.write("（空闲中）\n");
+      else await thread.abort("user");
       continue;
     }
 
-    const result = session.submit(text);
+    const result = await thread.submit(text);
     if (result === "rejected") {
       process.stdout.write("（当前回合不可插话，请等待或 /abort）\n");
     }
   }
 
-  await session.abort("user");
-  await session.whenIdle();
+  await thread.abort("user");
+  await thread.whenIdle();
   await new Promise((r) => setTimeout(r, 50)); // 等渲染器 flush
   process.stdout.write(`\n会话历史已保存到 ${cwd}/.ao/sessions/\n`);
   process.exit(0);

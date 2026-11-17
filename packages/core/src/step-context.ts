@@ -4,8 +4,10 @@
  */
 import type { ToolRouter } from "./tools/router.ts";
 import type { ReadWriteGate } from "./tools/gate.ts";
+import type { TurnContext } from "./turn-context.ts";
 
 export interface StepContext {
+  readonly turn: TurnContext;
   readonly cwd: string;
   readonly signal: AbortSignal;
   readonly router: ToolRouter;
@@ -15,6 +17,7 @@ export interface StepContext {
 }
 
 export function captureStepContext(input: {
+  turn: TurnContext;
   cwd: string;
   signal: AbortSignal;
   router: ToolRouter;
