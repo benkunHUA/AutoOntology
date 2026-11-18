@@ -21,7 +21,8 @@
       "@ao/core": ["packages/core/src/index.ts"],
       "@ao/commands": ["packages/commands/src/index.ts"],
       "@ao/tools": ["packages/tools/src/index.ts"],
-      "@ao/skills": ["packages/skills/src/index.ts"]
+      "@ao/skills": ["packages/skills/src/index.ts"],
+      "@ao/sandbox": ["packages/sandbox/src/index.ts"]
     }
   },
   "include": [

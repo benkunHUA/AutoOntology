@@ -12,7 +12,9 @@
 import type {
   ApprovalGate,
   EventSink,
+  HistoryItem,
   ModelClient,
+  PermissionProfile,
   SandboxManager,
   SessionEvent,
   ThreadIdentity,
@@ -25,7 +27,8 @@ import { ContextManager } from "./context-manager.ts";
 import { InputQueue } from "./input-queue.ts";
 import type { AgentHooks } from "./hooks.ts";
 import {
-  JsonlPersistence,
+  SessionStore,
+  loadSession,
   threadPersistencePath,
 } from "./persistence.ts";
 import type { TurnContext } from "./turn-context.ts";
@@ -34,6 +37,7 @@ import {
   ContextCompactor,
   ToolResultStore,
   TranscriptArchive,
+  type CompactionOutput,
 } from "./compaction/index.ts";
 import { AbortedError } from "./errors.ts";
 import type { AbortReason } from "./errors.ts";
@@ -62,14 +66,21 @@ export interface SessionOptions {
   handlers: ToolHandler[];
   emit: EventSink;
   hooks?: AgentHooks;
-  persistence?: JsonlPersistence;
+  persistence?: SessionStore;
   persistenceDir?: string;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
   skills?: SkillsOptions;
   identity?: ThreadIdentity;
+  /** 已恢复的初始历史；由 Session.open 注入。 */
+  initialHistory?: HistoryItem[];
+  window?: number;
+  windowId?: string;
+  previousWindowId?: string;
   /** 压缩归档目录；缺省从 persistenceDir 或 cwd/.ao 推导。 */
   compactionDir?: string;
+  /** 命令执行沙箱的权限基线；缺省由编排器按 cwd 推导。 */
+  permissionProfile?: PermissionProfile;
 }
 
 interface TurnStats {
@@ -98,13 +109,16 @@ export class Session {
   private readonly options: SessionOptions;
   private readonly router: ToolRouter;
   private readonly skillRuntime: SkillRuntime | null;
-  private readonly persistence: JsonlPersistence | undefined;
+  private readonly persistence: SessionStore | undefined;
   private readonly compactor: ContextCompactor;
   private active: ActiveTurn | null = null;
   private turnSeq = 0;
   private idleWaiters: Array<() => void> = [];
   private submissionTail: Promise<void> = Promise.resolve();
   private lastUserRequest = "";
+  private window: number;
+  private windowId: string;
+  private previousWindowId: string | undefined;
 
   constructor(options: SessionOptions) {
     this.options = options;
@@ -117,7 +131,10 @@ export class Session {
       parentThreadId,
       forkedFromThreadId,
     });
-    this.persistence = createPersistence(options, this.identity);
+    this.persistence = options.persistence ?? createStore(options, this.identity);
+    this.window = options.window ?? 0;
+    this.windowId = options.windowId ?? crypto.randomUUID();
+    this.previousWindowId = options.previousWindowId;
     this.skillRuntime = createSkillRuntime(options.skills);
     this.router = new ToolRouter([
       ...options.handlers,
@@ -125,6 +142,7 @@ export class Session {
     ]);
     this.history = new ContextManager({
       onAppend: (item) => this.persistence?.append(item),
+      initialItems: options.initialHistory,
     });
     const compactionDir = resolveCompactionDir(options);
     this.compactor = new ContextCompactor({
@@ -136,6 +154,44 @@ export class Session {
       results: new ToolResultStore({
         dir: join(compactionDir, "tool-results"),
       }),
+    });
+    this.persistence?.appendSessionMeta({
+      threadId: this.identity.threadId,
+      sessionId: this.identity.sessionId,
+      cwd: options.cwd,
+    });
+  }
+
+  /** 从 canonical 会话文件恢复历史并创建会话。 */
+  static async open(options: SessionOptions): Promise<Session> {
+    const identity = options.identity ?? {
+      threadId: newThreadId(),
+      sessionId: newSessionId(),
+      rootThreadId: newSessionId(),
+    };
+    const store =
+      options.persistence ??
+      (options.persistenceDir
+        ? new SessionStore(
+            threadPersistencePath(
+              options.persistenceDir,
+              identity.sessionId,
+              identity.threadId,
+            ),
+          )
+        : undefined);
+    if (!store) {
+      return new Session(options);
+    }
+    const loaded = await loadSession(store.filePath);
+    return new Session({
+      ...options,
+      identity,
+      persistence: store,
+      initialHistory: loaded.history,
+      window: loaded.window,
+      windowId: loaded.windowId || crypto.randomUUID(),
+      previousWindowId: loaded.previousWindowId,
     });
   }
 
@@ -193,14 +249,54 @@ export class Session {
     signal: AbortSignal = new AbortController().signal,
   ): Promise<{ compacted: boolean; summary?: string }> {
     if (this.active) return { compacted: false };
-    const compacted = await this.compactor.compactHistory(
+    const before = this.history.serialize();
+    const output = await this.compactor.compactHistory(
       this.history.serialize(),
       this.currentRequest(),
       signal,
     );
-    this.history.replaceAll(compacted);
+    this.persistCompaction(output, before);
+    this.history.replaceAll(output.items);
     this.worldState.resetBaseline();
     return { compacted: true };
+  }
+
+  private persistCompaction(
+    output: CompactionOutput,
+    before: readonly HistoryItem[],
+  ): void {
+    if (!this.persistence) return;
+    for (const event of output.events) {
+      if (event.type === "item_rewrite") {
+        this.persistence.appendRewrite(
+          event.callId,
+          event.reason,
+          event.output,
+          event.filePath,
+        );
+      } else if (event.type === "range_archive") {
+        const start = this.history.ordinalOf(before[event.startIndex] as HistoryItem);
+        const end = this.history.ordinalOf(before[event.endIndex] as HistoryItem);
+        if (start === undefined || end === undefined) continue;
+        this.persistence.appendArchive(
+          start,
+          end,
+          event.archivePath,
+          event.markerText,
+        );
+      } else if (event.type === "compaction") {
+        this.previousWindowId = this.windowId;
+        this.windowId = crypto.randomUUID();
+        this.window += 1;
+        this.persistence.appendCheckpoint({
+          window: this.window,
+          windowId: this.windowId,
+          previousWindowId: this.previousWindowId,
+          summary: event.summary,
+          replacementHistory: event.replacementHistory,
+        });
+      }
+    }
   }
 
   // ── 内部：开单与收尾 ──────────────────────────────────────────
@@ -253,8 +349,11 @@ export class Session {
         signal: active.controller.signal,
         worldState: this.worldState,
         compactor: this.compactor,
+        persistCompaction: (output, before) =>
+          this.persistCompaction(output, before),
         approval: this.options.approval,
         sandbox: this.options.sandbox,
+        permissionProfile: this.options.permissionProfile,
         skills: this.skillRuntime
           ? { runtime: this.skillRuntime }
           : undefined,
@@ -403,13 +502,13 @@ function resolveCompactionDir(options: SessionOptions): string {
   return join(options.cwd, ".ao", "compaction");
 }
 
-function createPersistence(
+function createStore(
   options: SessionOptions,
   identity: ThreadIdentity,
-): JsonlPersistence | undefined {
+): SessionStore | undefined {
   if (options.persistence) return options.persistence;
   if (!options.persistenceDir) return undefined;
-  return new JsonlPersistence(
+  return new SessionStore(
     threadPersistencePath(
       options.persistenceDir,
       identity.sessionId,

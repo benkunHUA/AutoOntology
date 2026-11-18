@@ -32,10 +32,11 @@ export const execCommand = defineTool({
     timeoutMs: TIMEOUT_MS,
   },
   sandboxable: {
-    sandboxPreference: () => "sandboxed",
+    sandboxPreference: () => "require",
     escalateOnFailure: () => true,
   },
   approvable: {
+    sandboxPermissions: () => "use_default",
     execApprovalRequirement: () => "needs_approval",
     approvalAction: (args, callId) => `exec ${callId}: ${String(args.cmd ?? "")}`,
   },
@@ -49,11 +50,11 @@ export const execCommand = defineTool({
       return Promise.resolve({ ok: false, output: resolved.reason });
     }
 
-    if (ctx.sandboxOverride === "unsandboxed") {
+    if (ctx.sandboxOverride === "bypass_first_attempt") {
       return runUnsandboxed(cmd, resolved.path, ctx);
     }
 
-    if (!ctx.sandbox) {
+    if (!ctx.sandbox || !ctx.sandboxPolicy) {
       return Promise.resolve({ ok: false, output: "sandbox unavailable" });
     }
 
@@ -63,6 +64,8 @@ export const execCommand = defineTool({
         signal: ctx.signal,
         timeoutMs: TIMEOUT_MS,
         maxBuffer: MAX_BUFFER,
+        override: ctx.sandboxOverride ?? "no_override",
+        policy: ctx.sandboxPolicy.filesystem,
       })
       .then(({ code, stdout, stderr, killed }) => {
         const output = [stdout, stderr].filter(Boolean).join("\n").trimEnd();

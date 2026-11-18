@@ -12,6 +12,7 @@ export default defineConfig({
       "@ao/core": src("core"),
       "@ao/tools": src("tools"),
       "@ao/skills": src("skills"),
+      "@ao/sandbox": src("sandbox"),
     },
   },
   test: {

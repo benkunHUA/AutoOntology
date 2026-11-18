@@ -15,7 +15,41 @@
  */
 export type ToolExposure = "direct" | "deferred" | "codeModeOnly" | "hidden";
 
-export type SandboxPreference = "default" | "unsandboxed" | "sandboxed";
+export type SandboxablePreference = "auto" | "require" | "forbid";
+
+export type SandboxType =
+  | "none"
+  | "macos_seatbelt"
+  | "linux_seccomp"
+  | "windows_restricted_token"
+  | "windows_mxc";
+
+export type SandboxOverride =
+  | "no_override"
+  | "escalated_with_restrictions"
+  | "bypass_first_attempt";
+
+export type SandboxPermissions =
+  | "use_default"
+  | "require_escalated"
+  | "with_additional_permissions";
+
+export interface FileSystemSandboxPolicy {
+  readonly kind: "unrestricted" | "restricted";
+  readonly writableRoots: readonly string[];
+  readonly deniedReads: readonly string[];
+}
+
+export interface NetworkSandboxPolicy {
+  readonly enabled: boolean;
+  readonly allowedHosts?: readonly string[];
+  readonly deniedHosts?: readonly string[];
+}
+
+export interface PermissionProfile {
+  readonly filesystem: FileSystemSandboxPolicy;
+  readonly network: NetworkSandboxPolicy;
+}
 
 export type ExecApprovalRequirement =
   | "skip"
@@ -50,7 +84,9 @@ export interface ToolExecutionContext {
   toolName: string;
   callId: string;
   sandbox?: SandboxManager;
-  sandboxOverride?: "unsandboxed";
+  sandboxOverride?: SandboxOverride;
+  sandboxType?: SandboxType;
+  sandboxPolicy?: PermissionProfile;
 }
 
 /** Handler 上下文：在 ToolExecutionContext 上附加主动调用编排器的入口。 */
@@ -91,11 +127,12 @@ export interface ToolHandler {
 }
 
 export interface Sandboxable {
-  sandboxPreference(): SandboxPreference;
+  sandboxPreference(): SandboxablePreference;
   escalateOnFailure(): boolean;
 }
 
 export interface Approvable {
+  sandboxPermissions(args: Record<string, unknown>): SandboxPermissions;
   execApprovalRequirement(
     args: Record<string, unknown>,
   ): ExecApprovalRequirement | undefined;
@@ -127,8 +164,10 @@ export interface ApprovalRequest {
   escalated?: boolean;
 }
 
+export type ApprovalDecision = "approved" | "approved_for_session" | "denied";
+
 export interface ApprovalGate {
-  request(request: ApprovalRequest): Promise<boolean>;
+  request(request: ApprovalRequest): Promise<ApprovalDecision>;
 }
 
 export interface SandboxCommandOptions {
@@ -136,6 +175,8 @@ export interface SandboxCommandOptions {
   signal: AbortSignal;
   timeoutMs: number;
   maxBuffer: number;
+  override: SandboxOverride;
+  policy: FileSystemSandboxPolicy;
 }
 
 export interface SandboxedCommandResult {
@@ -147,6 +188,11 @@ export interface SandboxedCommandResult {
 
 export interface SandboxManager {
   readonly available: boolean;
+  readonly type: SandboxType;
+  shouldSandbox(
+    preference: SandboxablePreference,
+    policy: PermissionProfile,
+  ): boolean;
   run(
     command: string,
     args: string[],

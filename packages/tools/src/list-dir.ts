@@ -19,10 +19,11 @@ export const listDir = defineTool({
     supportsParallel: true,
   },
   sandboxable: {
-    sandboxPreference: () => "default",
+    sandboxPreference: () => "auto",
     escalateOnFailure: () => true,
   },
   approvable: {
+    sandboxPermissions: () => "use_default",
     execApprovalRequirement: () => "skip",
     approvalAction: (args) => `list ${String(args.path ?? ".")}`,
   },

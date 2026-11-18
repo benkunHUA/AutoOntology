@@ -24,6 +24,7 @@ export {
   TOOL_RESULT_BATCH_CHAR_LIMIT,
 } from "./types.ts";
 export type { CompactionPort } from "./types.ts";
+export type { CompactionEvent, CompactionOutput } from "./types.ts";
 export { TranscriptArchive } from "./transcript-archive.ts";
 export type { TranscriptArchiveOptions } from "./transcript-archive.ts";
 export { ToolResultStore } from "./tool-result-store.ts";

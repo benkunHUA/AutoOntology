@@ -82,7 +82,8 @@ describe("ContextCompactor", () => {
     const compactor = makeCompactor(dir);
     const input = historyWithUsers(2);
     const output = await compactor.prepare(input, "hello", new AbortController().signal);
-    expect(output).toEqual(input);
+    expect(output.items).toEqual(input);
+    expect(output.events).toEqual([]);
   });
 
   it("超大最新工具批次会持久化为占位文本", async () => {
@@ -103,7 +104,7 @@ describe("ContextCompactor", () => {
       },
     ];
     const output = await compactor.toolResultBudget(input, 10);
-    expect(output[1]).toMatchObject({
+    expect(output.items[1]).toMatchObject({
       type: "function_call_output",
       output: expect.stringContaining("<persisted-output>"),
     });
@@ -114,8 +115,8 @@ describe("ContextCompactor", () => {
     const compactor = makeCompactor(dir);
     const input = historyWithUsers(55);
     const output = await compactor.snipCompact(input);
-    expect(output.length).toBeLessThan(input.length);
-    const marker = output.find(
+    expect(output.items.length).toBeLessThan(input.length);
+    const marker = output.items.find(
       (item) =>
         item.type === "message" &&
         /messages archived at /.test(item.text),
@@ -131,13 +132,15 @@ describe("ContextCompactor", () => {
       "current request",
       new AbortController().signal,
     );
-    expect(output).toHaveLength(1);
-    expect(output[0]).toMatchObject({
+    expect(output.items).toHaveLength(1);
+    expect(output.items[0]).toMatchObject({
       type: "message",
       role: "user",
       text: expect.stringContaining("[Compacted]"),
     });
-    expect(output[0].type === "message" && output[0].text).toContain("final summary");
+    expect(output.items[0].type === "message" && output.items[0].text).toContain(
+      "final summary",
+    );
   });
 
   it("reactive 保留最近消息并前置摘要", async () => {
@@ -148,12 +151,12 @@ describe("ContextCompactor", () => {
       "current request",
       new AbortController().signal,
     );
-    expect(output[0]).toMatchObject({
+    expect(output.items[0]).toMatchObject({
       type: "message",
       role: "user",
       text: expect.stringContaining("[Reactive compact]"),
     });
-    expect(output).toHaveLength(6);
+    expect(output.items).toHaveLength(6);
   });
 
   it("识别上下文超限错误", async () => {

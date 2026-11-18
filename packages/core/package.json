@@ -9,6 +9,7 @@
   "dependencies": {
     "@ao/api": "workspace:*",
     "@ao/protocol": "workspace:*",
+    "@ao/sandbox": "workspace:*",
     "@ao/skills": "workspace:*"
   }
 }

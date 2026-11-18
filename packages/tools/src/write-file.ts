@@ -20,10 +20,11 @@ export const writeFile = defineTool({
     // 未声明 supportsParallel → 独占写锁
   },
   sandboxable: {
-    sandboxPreference: () => "default",
+    sandboxPreference: () => "auto",
     escalateOnFailure: () => true,
   },
   approvable: {
+    sandboxPermissions: () => "use_default",
     execApprovalRequirement: () => "needs_approval",
     approvalAction: (args) => `write ${String(args.path ?? "")}`,
   },

@@ -13,13 +13,25 @@ import { estimateItemTokenCount } from "./tokens.ts";
 export class ContextManager {
   private items: HistoryItem[] = [];
   private readonly onAppend?: (item: HistoryItem) => void;
+  private readonly ordinals = new Map<HistoryItem, number>();
+  private nextOrdinal = 0;
 
-  constructor(options: { onAppend?: (item: HistoryItem) => void } = {}) {
+  constructor(
+    options: {
+      onAppend?: (item: HistoryItem) => void;
+      initialItems?: readonly HistoryItem[];
+    } = {},
+  ) {
     this.onAppend = options.onAppend;
+    for (const item of options.initialItems ?? []) {
+      this.items.push(item);
+      this.ordinals.set(item, this.nextOrdinal++);
+    }
   }
 
   append(item: HistoryItem): void {
     this.items.push(item);
+    this.ordinals.set(item, this.nextOrdinal++);
     this.onAppend?.(item);
   }
 
@@ -31,6 +43,15 @@ export class ContextManager {
   /** 压缩重写内存历史。持久化层仍保持追加语义，旧条目不回退。 */
   replaceAll(items: HistoryItem[]): void {
     this.items = [...items];
+    this.ordinals.clear();
+    for (const item of this.items) {
+      this.ordinals.set(item, this.nextOrdinal++);
+    }
+  }
+
+  /** 返回条目首次 append/replace 时分配的内存序号。 */
+  ordinalOf(item: HistoryItem): number | undefined {
+    return this.ordinals.get(item);
   }
 
   get size(): number {

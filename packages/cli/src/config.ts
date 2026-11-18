@@ -6,6 +6,15 @@
  */
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { PermissionProfile } from "@ao/protocol";
+
+export interface SandboxConfig {
+  writableRoots?: string[];
+  deniedReads?: string[];
+  network?: boolean;
+  networkAllow?: string[];
+  networkDeny?: string[];
+}
 
 export interface AppConfig {
   apiKey: string;
@@ -13,6 +22,7 @@ export interface AppConfig {
   baseUrl: string;
   approval?: ApprovalMode;
   skills: boolean;
+  sandbox?: SandboxConfig;
 }
 
 interface ConfigFile {
@@ -21,6 +31,7 @@ interface ConfigFile {
   base_url?: string;
   approval?: ApprovalMode;
   skills?: boolean;
+  sandbox?: SandboxConfig;
 }
 
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
@@ -58,5 +69,26 @@ export function resolveConfig(file: ConfigFile): AppConfig {
     baseUrl: file.base_url ?? env.AO_BASE_URL ?? DEFAULT_BASE_URL,
     approval: file.approval,
     skills: file.skills ?? true,
+    sandbox: file.sandbox,
+  };
+}
+
+export function resolveSandboxProfile(
+  cwd: string,
+  config: AppConfig,
+): PermissionProfile {
+  const sandbox = config.sandbox ?? {};
+  const writableRoots = sandbox.writableRoots ?? [];
+  return {
+    filesystem: {
+      kind: "restricted",
+      writableRoots: writableRoots.length > 0 ? writableRoots : [cwd],
+      deniedReads: sandbox.deniedReads ?? [],
+    },
+    network: {
+      enabled: sandbox.network ?? false,
+      allowedHosts: sandbox.networkAllow,
+      deniedHosts: sandbox.networkDeny,
+    },
   };
 }

@@ -14,7 +14,7 @@ import { ToolOrchestrator } from "../src/tools/orchestrator.ts";
 import { ToolRouter } from "../src/tools/router.ts";
 import { ToolRegistry } from "../src/tools/registry.ts";
 import { ToolCallRuntime } from "../src/tools/runtime.ts";
-import { SandboxDeniedError } from "../src/tools/sandbox.ts";
+import { SandboxDeniedError } from "@ao/sandbox";
 
 function call(name: string, id = "call_1", args = "{}"): FunctionCallItem {
   return { type: "function_call", callId: id, name, arguments: args };
@@ -31,13 +31,16 @@ function noopHandler(name: string, spec: Partial<ToolHandler["spec"]> = {}): Too
 
 function approvalRequirement(requirement: Approvable["execApprovalRequirement"]): Approvable {
   return {
+    sandboxPermissions: () => "use_default",
     execApprovalRequirement: requirement,
     approvalAction: () => "test action",
   };
 }
 
 const UNAVAILABLE_SANDBOX: SandboxManager = {
+  type: "none",
   available: false,
+  shouldSandbox: () => true,
   run: async () => {
     throw new Error("unreachable");
   },
@@ -166,12 +169,12 @@ describe("ToolOrchestrator", () => {
     };
 
     const denied = await new ToolOrchestrator({
-      approval: { request: async () => false },
+      approval: { request: async () => "denied" },
     }).run(runtime, {}, ctx);
     expect(denied.output).toContain("not approved");
 
     const allowed = await new ToolOrchestrator({
-      approval: { request: async () => true },
+      approval: { request: async () => "approved" },
     }).run(runtime, {}, ctx);
     expect(allowed).toEqual({ ok: true, output: "ran" });
   });
@@ -179,7 +182,7 @@ describe("ToolOrchestrator", () => {
   it("sandboxed 工具在沙箱不可用时 fail-closed", async () => {
     const runtime: ToolRuntime = {
       sandboxable: {
-        sandboxPreference: () => "sandboxed",
+        sandboxPreference: () => "require",
         escalateOnFailure: () => true,
       },
       async run() {
@@ -209,7 +212,7 @@ describe("ToolOrchestrator", () => {
       approval: {
         request: async (request) => {
           requests.push(request);
-          return true;
+          return "approved";
         },
       },
     }).run(runtime, {}, {
@@ -226,13 +229,13 @@ describe("ToolOrchestrator", () => {
     const requests: string[] = [];
     const runtime: ToolRuntime = {
       sandboxable: {
-        sandboxPreference: () => "sandboxed",
+        sandboxPreference: () => "require",
         escalateOnFailure: () => true,
       },
       approvable: approvalRequirement(() => "needs_approval"),
       async run(_args, ctx) {
         runs++;
-        if (!ctx.sandboxOverride) {
+        if (ctx.sandboxOverride !== "bypass_first_attempt") {
           throw new SandboxDeniedError("denied by seatbelt");
         }
         return { ok: true, output: "escalated" };
@@ -242,11 +245,13 @@ describe("ToolOrchestrator", () => {
       approval: {
         request: async (request) => {
           requests.push(request.action);
-          return true;
+          return "approved";
         },
       },
       sandbox: {
+        type: "macos_seatbelt",
         available: true,
+        shouldSandbox: () => true,
         run: async () => ({ code: 0, stdout: "", stderr: "" }),
       },
     }).run(runtime, {}, {
@@ -257,7 +262,49 @@ describe("ToolOrchestrator", () => {
     });
     expect(runs).toBe(2);
     expect(result).toEqual({ ok: true, output: "escalated" });
-    expect(requests[1]).toContain("retry unsandboxed");
+    expect(requests[1]).toContain("retry bypass_first_attempt");
+  });
+
+  it("denied-read 存在时升级必须保留沙箱", async () => {
+    let runs = 0;
+    const runtime: ToolRuntime = {
+      sandboxable: {
+        sandboxPreference: () => "require",
+        escalateOnFailure: () => true,
+      },
+      async run(_args, ctx) {
+        runs++;
+        if (ctx.sandboxOverride !== "escalated_with_restrictions") {
+          throw new SandboxDeniedError("denied by seatbelt");
+        }
+        return { ok: true, output: "escalated in sandbox" };
+      },
+    };
+    const result = await new ToolOrchestrator({
+      approval: { request: async () => "approved" },
+      sandbox: {
+        type: "macos_seatbelt",
+        available: true,
+        shouldSandbox: () => true,
+        run: async () => ({ code: 0, stdout: "", stderr: "" }),
+      },
+      permissionProfile: {
+        filesystem: {
+          kind: "restricted",
+          writableRoots: ["/tmp"],
+          deniedReads: ["/tmp/.env"],
+        },
+        network: { enabled: false },
+      },
+    }).run(runtime, {}, {
+      cwd: "/tmp",
+      signal: new AbortController().signal,
+      toolName: "escalate-restricted",
+      callId: "call_1",
+    });
+
+    expect(runs).toBe(2);
+    expect(result).toEqual({ ok: true, output: "escalated in sandbox" });
   });
 });
 

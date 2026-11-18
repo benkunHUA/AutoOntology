@@ -27,6 +27,7 @@ import { createRenderer } from "./render.ts";
 import {
   loadConfigFile,
   resolveConfig,
+  resolveSandboxProfile,
   type AppConfig,
 } from "./config.ts";
 
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
     handlers: defaultTools(),
     approval,
     skills,
+    permissionProfile: resolveSandboxProfile(cwd, config),
     emit: (event) => renderer.render(event),
     persistenceDir: resolve(cwd, ".ao", "sessions"),
   };
@@ -145,8 +147,8 @@ function createApprovalGate(_useMock: boolean, mode: "auto" | "deny"): ApprovalG
   return {
     async request(request) {
       process.stderr.write(`[approval] ${request.action}\n`);
-      if (request.requiresHuman) return false;
-      return mode === "auto";
+      if (request.requiresHuman) return "denied";
+      return mode === "auto" ? "approved" : "denied";
     },
   };
 }

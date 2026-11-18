@@ -23,6 +23,7 @@ import {
   TOOL_RESULT_BATCH_CHAR_LIMIT,
 } from "./types.ts";
 import type { CompactionPort } from "./types.ts";
+import type { CompactionEvent, CompactionOutput } from "./types.ts";
 
 export interface ContextCompactorOptions {
   readonly client: ModelClient;
@@ -60,22 +61,32 @@ export class ContextCompactor implements CompactionPort {
     messages: readonly HistoryItem[],
     activeRequest: string,
     signal: AbortSignal,
-  ): Promise<HistoryItem[]> {
-    let next = cloneItems(messages);
-    next = await this.toolResultBudget(next);
-    next = await this.snipCompact(next);
+  ): Promise<CompactionOutput> {
+    const events: CompactionEvent[] = [];
+    let output = await this.toolResultBudget(messages);
+    events.push(...output.events);
+    let next = output.items;
+    output = await this.snipCompact(next);
+    events.push(...output.events);
+    next = output.items;
     if (ContextCompactor.estimateChars(next) > CONTEXT_CHAR_LIMIT) {
       const target = Math.floor(CONTEXT_CHAR_LIMIT * MICRO_TARGET_RATIO);
-      next = await this.microCompact(next, target);
+      output = await this.microCompact(next, target);
+      events.push(...output.events);
+      next = output.items;
       if (ContextCompactor.estimateChars(next) > CONTEXT_CHAR_LIMIT) {
-        next = await this.fitToolResults(next, target);
+        output = await this.fitToolResults(next, target);
+        events.push(...output.events);
+        next = output.items;
         if (ContextCompactor.estimateChars(next) > CONTEXT_CHAR_LIMIT) {
           this.#log("[自动压缩]");
-          next = await this.compactHistory(next, activeRequest, signal);
+          output = await this.compactHistory(next, activeRequest, signal);
+          events.push(...output.events);
+          next = output.items;
         }
       }
     }
-    return next;
+    return { items: next, events };
   }
 
   async afterBatch(
@@ -83,18 +94,18 @@ export class ContextCompactor implements CompactionPort {
     executedToolNames: readonly string[],
     activeRequest: string,
     signal: AbortSignal,
-  ): Promise<HistoryItem[]> {
+  ): Promise<CompactionOutput> {
     if (executedToolNames.includes(COMPACT_TOOL_NAME)) {
       return this.compactHistory(cloneItems(messages), activeRequest, signal);
     }
-    return cloneItems(messages);
+    return { items: cloneItems(messages), events: [] };
   }
 
   async reactive(
     messages: readonly HistoryItem[],
     activeRequest: string,
     signal: AbortSignal,
-  ): Promise<HistoryItem[]> {
+  ): Promise<CompactionOutput> {
     this.#log("[上下文超限，压缩重试]");
     const source = cloneItems(messages);
     const transcriptPath = await this.#archive.write(source);
@@ -110,7 +121,17 @@ export class ContextCompactor implements CompactionPort {
       summaryText,
       transcriptPath,
     );
-    return tailStart ? [summary, ...source.slice(tailStart)] : [summary];
+    const items = tailStart ? [summary, ...source.slice(tailStart)] : [summary];
+    return {
+      items,
+      events: [
+        {
+          type: "compaction",
+          summary: summaryText,
+          replacementHistory: items,
+        },
+      ],
+    };
   }
 
   isPromptTooLong(error: unknown): boolean {
@@ -127,10 +148,11 @@ export class ContextCompactor implements CompactionPort {
   async toolResultBudget(
     messages: readonly HistoryItem[],
     maxChars = TOOL_RESULT_BATCH_CHAR_LIMIT,
-  ): Promise<HistoryItem[]> {
+  ): Promise<CompactionOutput> {
     const next = cloneItems(messages);
     const tail = latestToolResultSuffix(next);
-    if (tail.length === 0) return next;
+    if (tail.length === 0) return { items: next, events: [] };
+    const events: CompactionEvent[] = [];
 
     let total = tail.reduce(
       (sum, item) => sum + (item.type === "function_call_output" ? charCount(item.output) : 0),
@@ -155,46 +177,66 @@ export class ContextCompactor implements CompactionPort {
         block.output,
       );
       next[index] = { ...block, output: replacement };
+      events.push({
+        type: "item_rewrite",
+        callId: block.callId,
+        reason: "tool_result_persist",
+        output: replacement,
+      });
       total = latestToolResultSuffix(next).reduce(
         (sum, item) =>
           sum + (item.type === "function_call_output" ? charCount(item.output) : 0),
         0,
       );
     }
-    return next;
+    return { items: next, events };
   }
 
   /** Step 2：把超长历史的中段归档为一个可校验 marker。 */
   async snipCompact(
     messages: readonly HistoryItem[],
     maxMessages = SNIP_MAX_MESSAGES,
-  ): Promise<HistoryItem[]> {
-    if (messages.length <= maxMessages) return cloneItems(messages);
+  ): Promise<CompactionOutput> {
+    if (messages.length <= maxMessages) {
+      return { items: cloneItems(messages), events: [] };
+    }
     const source = cloneItems(messages);
     let headEnd = SNIP_HEAD_MESSAGES;
     let tailStart = source.length - (maxMessages - headEnd - 1);
     headEnd = moveBoundaryBackToKeepCallOutputPair(source, headEnd);
     tailStart = moveBoundaryBackToKeepCallOutputPair(source, tailStart);
-    if (headEnd >= tailStart) return source;
+    if (headEnd >= tailStart) return { items: source, events: [] };
 
     const middle = source.slice(headEnd, tailStart);
     if (middle.length === 1 && (await this.#archive.isMarker(middle[0]))) {
-      return source;
+      return { items: source, events: [] };
     }
     const transcriptPath = await this.#archive.write(source);
     const marker = message(
       "user",
       `[${tailStart - headEnd} messages archived at ${transcriptPath}]`,
     );
-    return [...source.slice(0, headEnd), marker, ...source.slice(tailStart)];
+    return {
+      items: [...source.slice(0, headEnd), marker, ...source.slice(tailStart)],
+      events: [
+        {
+          type: "range_archive",
+          startIndex: headEnd,
+          endIndex: tailStart - 1,
+          archivePath: transcriptPath,
+          markerText: marker.text,
+        },
+      ],
+    };
   }
 
   /** Step 3：把模型已经读过的旧工具结果替换为可读回路径。 */
   async microCompact(
     messages: readonly HistoryItem[],
     targetChars: number | undefined,
-  ): Promise<HistoryItem[]> {
+  ): Promise<CompactionOutput> {
     const next = cloneItems(messages);
+    const events: CompactionEvent[] = [];
     const entries = toolResultIndexes(next);
     const unseen = unseenToolResultIndexes(next);
     const consumed = entries.filter((index) => !unseen.has(index));
@@ -221,16 +263,24 @@ export class ContextCompactor implements CompactionPort {
         ...item,
         output: `${EARLIER_RESULT_PREFIX}${savedPath}]`,
       };
+      events.push({
+        type: "item_rewrite",
+        callId: item.callId,
+        reason: "tool_result_placeholder",
+        output: `${EARLIER_RESULT_PREFIX}${savedPath}]`,
+        filePath: savedPath,
+      });
     }
-    return next;
+    return { items: next, events };
   }
 
   /** Step 4：把超大结果缩短为短预览，直到低于目标值。 */
   async fitToolResults(
     messages: readonly HistoryItem[],
     targetChars: number,
-  ): Promise<HistoryItem[]> {
+  ): Promise<CompactionOutput> {
     const next = cloneItems(messages);
+    const events: CompactionEvent[] = [];
     const blocks = toolResultIndexes(next)
       .map((index) => next[index])
       .filter(
@@ -248,10 +298,18 @@ export class ContextCompactor implements CompactionPort {
       );
       if (charCount(replacement) < charCount(block.output)) {
         const index = next.indexOf(block);
-        if (index >= 0) next[index] = { ...block, output: replacement };
+        if (index >= 0) {
+          next[index] = { ...block, output: replacement };
+          events.push({
+            type: "item_rewrite",
+            callId: block.callId,
+            reason: "tool_result_preview",
+            output: replacement,
+          });
+        }
       }
     }
-    return next;
+    return { items: next, events };
   }
 
   summaryInput(messages: readonly HistoryItem[]): string {
@@ -315,14 +373,24 @@ export class ContextCompactor implements CompactionPort {
     messages: readonly HistoryItem[],
     activeRequest: string,
     signal: AbortSignal,
-  ): Promise<HistoryItem[]> {
+  ): Promise<CompactionOutput> {
     const source = cloneItems(messages);
     const transcriptPath = await this.#archive.write(source);
     this.#log(`[transcript 已保存：${transcriptPath}]`);
     const summary = await this.summarizeHistory(source, signal);
-    return [
+    const items = [
       this.summaryMessage(COMPACTED_LABEL, activeRequest, summary, transcriptPath),
     ];
+    return {
+      items,
+      events: [
+        {
+          type: "compaction",
+          summary,
+          replacementHistory: items,
+        },
+      ],
+    };
   }
 
   #log(text: string): void {

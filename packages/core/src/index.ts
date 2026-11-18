@@ -9,6 +9,7 @@ export * from "./input-queue.ts";
 export * from "./world-state.ts";
 export * from "./hooks.ts";
 export * from "./errors.ts";
+export * from "./approval-cache.ts";
 export * from "./persistence.ts";
 export * from "./compaction/index.ts";
 export * from "./skills.ts";

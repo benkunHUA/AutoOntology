@@ -213,11 +213,20 @@ importers:
       '@ao/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@ao/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@ao/skills':
         specifier: workspace:*
         version: link:../skills
 
   packages/protocol: {}
+
+  packages/sandbox:
+    dependencies:
+      '@ao/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/skills:
     dependencies:

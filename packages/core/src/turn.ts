@@ -24,9 +24,13 @@ import { captureStepContext } from "./step-context.ts";
 import { ReadWriteGate } from "./tools/gate.ts";
 import type { ToolRouter } from "./tools/router.ts";
 import { ToolOrchestrator } from "./tools/orchestrator.ts";
-import { createSandboxManager } from "./tools/sandbox.ts";
+import { createSandboxManager } from "@ao/sandbox";
 import { ToolCallRuntime } from "./tools/runtime.ts";
-import { MAX_REACTIVE_RETRIES, type ContextCompactor } from "./compaction/index.ts";
+import {
+  MAX_REACTIVE_RETRIES,
+  type CompactionOutput,
+  type ContextCompactor,
+} from "./compaction/index.ts";
 import { injectSkillMentions, prepareTurnSkills } from "./skills.ts";
 import {
   defaultWorldStateContributors,
@@ -39,6 +43,7 @@ import type {
   FunctionCallItem,
   HistoryItem,
   ModelClient,
+  PermissionProfile,
   SandboxManager,
   Usage,
 } from "@ao/protocol";
@@ -57,8 +62,13 @@ export interface RunTurnDeps {
   signal: AbortSignal;
   worldState: WorldStateManager;
   compactor: ContextCompactor;
+  persistCompaction: (
+    output: CompactionOutput,
+    before: readonly HistoryItem[],
+  ) => void;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
+  permissionProfile?: PermissionProfile;
   skills?: { runtime: SkillRuntime };
 }
 
@@ -80,6 +90,7 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     signal,
     worldState,
     compactor,
+    persistCompaction,
   } = deps;
 
   let activeRequest = initialText;
@@ -101,6 +112,7 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
   const orchestrator = new ToolOrchestrator({
     approval: deps.approval,
     sandbox: deps.sandbox ?? createSandboxManager(),
+    permissionProfile: deps.permissionProfile,
   });
   const gate = new ReadWriteGate();
 
@@ -155,8 +167,9 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     // ── 每次采样前压缩：返回的历史替换当前历史 ─────────────────────
     const historyBeforePrepare = history.serialize();
     const prepared = await compactor.prepare(historyBeforePrepare, activeRequest, signal);
-    if (JSON.stringify(prepared) !== JSON.stringify(historyBeforePrepare)) {
-      history.replaceAll(prepared);
+    persistCompaction(prepared, historyBeforePrepare);
+    if (JSON.stringify(prepared.items) !== JSON.stringify(historyBeforePrepare)) {
+      history.replaceAll(prepared.items);
       worldState.resetBaseline();
     }
 
@@ -239,8 +252,9 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       activeRequest,
       signal,
     );
-    if (JSON.stringify(afterBatch) !== JSON.stringify(historyBeforeBatch)) {
-      history.replaceAll(afterBatch);
+    persistCompaction(afterBatch, historyBeforeBatch);
+    if (JSON.stringify(afterBatch.items) !== JSON.stringify(historyBeforeBatch)) {
+      history.replaceAll(afterBatch.items);
       worldState.resetBaseline();
     }
     if (streamError !== null) {
@@ -253,7 +267,8 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
           activeRequest,
           signal,
         );
-        history.replaceAll(reactiveHistory);
+        persistCompaction(reactiveHistory, history.serialize());
+        history.replaceAll(reactiveHistory.items);
         worldState.resetBaseline();
         reactiveRetries++;
         continue;
