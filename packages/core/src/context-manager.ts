@@ -8,6 +8,7 @@
  */
 import type { FunctionCallOutputItem, HistoryItem } from "@ao/protocol";
 import { functionCallOutput } from "@ao/protocol";
+import { estimateItemTokenCount } from "./tokens.ts";
 
 export class ContextManager {
   private items: HistoryItem[] = [];
@@ -36,26 +37,13 @@ export class ContextManager {
     return this.items.length;
   }
 
-  /** 粗略 token 估算（chars/4），压缩层接入前用于观测。 */
+  /** 粗略 token 估算，供压缩阈值与观测使用。 */
   estimateTokens(): number {
-    let chars = 0;
+    let tokens = 0;
     for (const item of this.items) {
-      switch (item.type) {
-        case "message":
-          chars += item.text.length;
-          break;
-        case "function_call":
-          chars += item.name.length + item.arguments.length;
-          break;
-        case "function_call_output":
-          chars += item.output.length;
-          break;
-        case "turn_marker":
-          chars += item.detail.length;
-          break;
-      }
+      tokens += estimateItemTokenCount(item);
     }
-    return Math.ceil(chars / 4);
+    return tokens;
   }
 
   /**

@@ -35,6 +35,8 @@ export interface ModelRequest {
   input: HistoryItem[];
   /** 本步骤可见的工具表（只下发给模型，不进历史）。 */
   tools: ToolSchemaNode[];
+  /** 可选的最大输出 token 数；仅压缩等受控请求需要。 */
+  maxOutputTokens?: number;
 }
 
 /** 发给模型的工具 schema（协议无关的中间形态）。 */

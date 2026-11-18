@@ -20,6 +20,7 @@ import type {
 } from "@ao/protocol";
 import type { SkillRuntime } from "@ao/skills";
 import { newSessionId, newThreadId } from "@ao/protocol";
+import { join } from "node:path";
 import { ContextManager } from "./context-manager.ts";
 import { InputQueue } from "./input-queue.ts";
 import type { AgentHooks } from "./hooks.ts";
@@ -29,6 +30,11 @@ import {
 } from "./persistence.ts";
 import type { TurnContext } from "./turn-context.ts";
 import type { TurnResult } from "./turn.ts";
+import {
+  ContextCompactor,
+  ToolResultStore,
+  TranscriptArchive,
+} from "./compaction.ts";
 import { AbortedError } from "./errors.ts";
 import type { AbortReason } from "./errors.ts";
 import { RegularTask } from "./tasks/regular.ts";
@@ -62,6 +68,8 @@ export interface SessionOptions {
   sandbox?: SandboxManager;
   skills?: SkillsOptions;
   identity?: ThreadIdentity;
+  /** 压缩归档目录；缺省从 persistenceDir 或 cwd/.ao 推导。 */
+  compactionDir?: string;
 }
 
 interface TurnStats {
@@ -91,6 +99,7 @@ export class Session {
   private readonly router: ToolRouter;
   private readonly skillRuntime: SkillRuntime | null;
   private readonly persistence: JsonlPersistence | undefined;
+  private readonly compactor: ContextCompactor;
   private active: ActiveTurn | null = null;
   private turnSeq = 0;
   private idleWaiters: Array<() => void> = [];
@@ -115,6 +124,17 @@ export class Session {
     ]);
     this.history = new ContextManager({
       onAppend: (item) => this.persistence?.append(item),
+    });
+    const compactionDir = resolveCompactionDir(options);
+    this.compactor = new ContextCompactor({
+      client: options.client,
+      model: options.model,
+      archive: new TranscriptArchive({
+        dir: join(compactionDir, "transcripts"),
+      }),
+      results: new ToolResultStore({
+        dir: join(compactionDir, "tool-results"),
+      }),
     });
   }
 
@@ -167,6 +187,21 @@ export class Session {
     return new Promise((resolve) => this.idleWaiters.push(resolve));
   }
 
+  /** 空闲时手动压缩当前历史；忙碌时直接返回未压缩。 */
+  async compact(
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<{ compacted: boolean; summary?: string }> {
+    if (this.active) return { compacted: false };
+    const compacted = await this.compactor.compactHistory(
+      this.history.serialize(),
+      this.currentRequest(),
+      signal,
+    );
+    this.history.replaceAll(compacted);
+    this.worldState.resetBaseline();
+    return { compacted: true };
+  }
+
   // ── 内部：开单与收尾 ──────────────────────────────────────────
 
   private startTurn(text: string): void {
@@ -211,6 +246,7 @@ export class Session {
         hooks: this.options.hooks,
         signal: active.controller.signal,
         worldState: this.worldState,
+        compactor: this.compactor,
         approval: this.options.approval,
         sandbox: this.options.sandbox,
         skills: this.skillRuntime
@@ -323,6 +359,21 @@ export class Session {
     this.options.emit(event);
   }
 
+  private currentRequest(): string {
+    const items = this.history.serialize();
+    for (let index = items.length - 1; index >= 0; index--) {
+      const item = items[index];
+      if (
+        item.type === "message" &&
+        item.role === "user" &&
+        !item.text.startsWith("[")
+      ) {
+        return item.text;
+      }
+    }
+    return "";
+  }
+
   private dispatchSubmission(
     text: string,
     mode: SubmissionMode,
@@ -349,6 +400,12 @@ export class Session {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveCompactionDir(options: SessionOptions): string {
+  if (options.compactionDir) return options.compactionDir;
+  if (options.persistenceDir) return join(options.persistenceDir, "compaction");
+  return join(options.cwd, ".ao", "compaction");
 }
 
 function createPersistence(

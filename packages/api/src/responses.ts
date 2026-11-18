@@ -65,6 +65,9 @@ export class ResponsesClient implements ModelClient {
           stream: true,
           // 让服务端显式回传 item 与完成状态
           parallel_tool_calls: true,
+          ...(request.maxOutputTokens !== undefined
+            ? { max_output_tokens: request.maxOutputTokens }
+            : {}),
         }),
       });
     } finally {

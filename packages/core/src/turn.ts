@@ -26,7 +26,7 @@ import type { ToolRouter } from "./tools/router.ts";
 import { ToolOrchestrator } from "./tools/orchestrator.ts";
 import { createSandboxManager } from "./tools/sandbox.ts";
 import { ToolCallRuntime } from "./tools/runtime.ts";
-import { shouldCompact, SummaryCompactor } from "./compaction.ts";
+import { MAX_REACTIVE_RETRIES, type ContextCompactor } from "./compaction.ts";
 import { injectSkillMentions, prepareTurnSkills } from "./skills.ts";
 import {
   defaultWorldStateContributors,
@@ -56,6 +56,7 @@ export interface RunTurnDeps {
   hooks?: AgentHooks;
   signal: AbortSignal;
   worldState: WorldStateManager;
+  compactor: ContextCompactor;
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
   skills?: { runtime: SkillRuntime };
@@ -78,21 +79,16 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     hooks,
     signal,
     worldState,
+    compactor,
   } = deps;
 
-  const compactor = new SummaryCompactor(client, turn.model);
-
-  // ── 开火前压缩：先于新输入落账 ─────────────────────────────
-  if (shouldCompact(history)) {
-    const outcome = await compactor.compact(history, { signal });
-    if (outcome.compacted) worldState.resetBaseline();
-  }
-
+  let activeRequest = initialText;
   const initialInput = { text: initialText, at: new Date(turn.startedAt).toISOString() };
   const reviewedInitial = hooks?.reviewInput
     ? await hooks.reviewInput(initialInput, turn)
     : initialText;
   if (reviewedInitial !== null) {
+    activeRequest = reviewedInitial;
     history.append(message("user", reviewedInitial));
   }
 
@@ -112,6 +108,7 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
   let toolCalls = 0;
   let finalMessage: string | null = null;
   let stepIndex = 0;
+  let reactiveRetries = 0;
 
   for (;;) {
     throwIfAborted(signal);
@@ -123,6 +120,7 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
         ? await hooks.reviewInput(pending, turn)
         : pending.text;
       if (reviewed === null) continue; // 被钩子拦截
+      activeRequest = reviewed;
       history.append(message("user", reviewed));
       if (preparedSkills) {
         await injectSkillMentions(
@@ -133,12 +131,6 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
           reviewed,
         );
       }
-    }
-
-    // ── 回合中压缩：继续前检查是否超限 ─────────────────────────
-    if (shouldCompact(history)) {
-      const outcome = await compactor.compact(history, { signal });
-      if (outcome.compacted) worldState.resetBaseline();
     }
 
     // ── 步骤快照：本步的工具表、环境、取消信号 ─────────────────────
@@ -159,6 +151,14 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       defaultWorldStateContributors(),
       { cwd: step.cwd, tools: router.modelVisibleSpecs() },
     );
+
+    // ── 每次采样前压缩：返回的历史替换当前历史 ─────────────────────
+    const historyBeforePrepare = history.serialize();
+    const prepared = await compactor.prepare(historyBeforePrepare, activeRequest, signal);
+    if (JSON.stringify(prepared) !== JSON.stringify(historyBeforePrepare)) {
+      history.replaceAll(prepared);
+      worldState.resetBaseline();
+    }
 
     // ── 采样：重试循环包住事件循环 ────────────────────────────────
     let needsContinue = false;
@@ -232,22 +232,39 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     for (const { call, result } of collected) {
       history.append(functionCallOutput(call.callId, result.output, result.ok));
     }
-    if (streamError !== null) throw streamError;
+    const afterBatch = await compactor.afterBatch(
+      history.serialize(),
+      collected.map(({ call }) => call.name),
+      activeRequest,
+      signal,
+    );
+    if (JSON.stringify(afterBatch) !== JSON.stringify(history.serialize())) {
+      history.replaceAll(afterBatch);
+      worldState.resetBaseline();
+    }
+    if (streamError !== null) {
+      if (
+        compactor.isPromptTooLong(streamError) &&
+        reactiveRetries < MAX_REACTIVE_RETRIES
+      ) {
+        const reactiveHistory = await compactor.reactive(
+          history.serialize(),
+          activeRequest,
+          signal,
+        );
+        history.replaceAll(reactiveHistory);
+        worldState.resetBaseline();
+        reactiveRetries++;
+        continue;
+      }
+      throw streamError;
+    }
 
     // ── 是否继续：只有三个输入，不做文本语义判断 ────────────────────
     const shouldContinue =
       stepToolCalls.length > 0 || needsContinue || inputQueue.hasPending();
 
     if (!shouldContinue) {
-      // ── 收尾压缩：失败只警告，保留已完成答复 ────────────────
-      if (shouldCompact(history)) {
-        try {
-          const outcome = await compactor.compact(history, { signal });
-          if (outcome.compacted) worldState.resetBaseline();
-        } catch (error) {
-          console.warn(`[core] post-turn compaction failed: ${(error as Error).message}`);
-        }
-      }
       const summary: TurnSummary = {
         turnId: turn.turnId,
         finalMessage,
