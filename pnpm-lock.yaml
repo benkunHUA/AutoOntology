@@ -190,6 +190,9 @@ importers:
       '@ao/api':
         specifier: workspace:*
         version: link:../api
+      '@ao/commands':
+        specifier: workspace:*
+        version: link:../commands
       '@ao/core':
         specifier: workspace:*
         version: link:../core
@@ -199,6 +202,12 @@ importers:
       '@ao/tools':
         specifier: workspace:*
         version: link:../tools
+
+  packages/commands:
+    dependencies:
+      '@ao/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/core:
     dependencies:

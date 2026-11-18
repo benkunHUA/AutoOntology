@@ -8,9 +8,19 @@
  * 命令：直接输入 = 提交（忙碌时自动插话）；/abort 中断；/quit 退出。
  */
 import { createInterface } from "node:readline/promises";
+import { writeSync } from "node:fs";
 import { resolve } from "node:path";
 import { MockModelClient, ResponsesClient } from "@ao/api";
-import { Thread } from "@ao/core";
+import {
+  SlashCommandDispatcher,
+  discoverSlashCommands,
+  parseSlashCommand,
+  type SlashCommandContext,
+} from "@ao/commands";
+import {
+  ThreadManager,
+  type ThreadOptions,
+} from "@ao/core";
 import type { ApprovalGate, ModelClient } from "@ao/protocol";
 import { defaultTools } from "@ao/tools";
 import { createRenderer } from "./render.ts";
@@ -50,7 +60,7 @@ async function main(): Promise<void> {
   const skills = {
     enabled: config.skills,
   };
-  const thread = new Thread({
+  const threadOptions: ThreadOptions = {
     cwd,
     model: useMock ? "mock" : config.modelName,
     instructions: SYSTEM_INSTRUCTIONS,
@@ -60,17 +70,28 @@ async function main(): Promise<void> {
     skills,
     emit: (event) => renderer.render(event),
     persistenceDir: resolve(cwd, ".ao", "sessions"),
-  });
+  };
+  const threads = new ThreadManager();
+  threads.createRoot(threadOptions);
+  const currentThread = () => threads.current()!;
+  const commandDispatcher = new SlashCommandDispatcher(discoverSlashCommands());
+  const commandContext: SlashCommandContext = {
+    get threadId() {
+      return currentThread().threadId;
+    },
+    threadManager: threads,
+  };
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   process.stdout.write(
     `ao ${useMock ? "(mock)" : ""} · ${cwd}\n` +
-      `输入任务开始；忙碌时输入会自动插话；/abort 中断；/quit 退出\n\n`,
+      `输入任务开始；忙碌时输入会自动插话；/abort 中断；/new 新建会话；/compact 压缩上下文；/quit 退出\n\n`,
   );
 
   let quitting = false;
   process.on("SIGINT", async () => {
+    const thread = currentThread();
     if (thread.isBusy) {
       await thread.abort("user");
       return;
@@ -85,25 +106,34 @@ async function main(): Promise<void> {
 
     const text = line.trim();
     if (!text) continue;
-    if (text === "/quit") break;
 
-    if (text === "/abort") {
-      if (!thread.isBusy) process.stdout.write("（空闲中）\n");
-      else await thread.abort("user");
+    if (parseSlashCommand(text) !== null) {
+      const commandResult = await commandDispatcher.dispatch(text, commandContext);
+      writeLine(
+        commandResult.ok
+          ? commandResult.output
+          : `（${commandResult.output}）`,
+      );
+      if (commandResult.exit) break;
       continue;
     }
 
-    const result = await thread.submit(text);
+    const result = await currentThread().submit(text);
     if (result === "rejected") {
       process.stdout.write("（当前回合不可插话，请等待或 /abort）\n");
     }
   }
 
+  const thread = currentThread();
   await thread.abort("user");
   await thread.whenIdle();
   await new Promise((r) => setTimeout(r, 50)); // 等渲染器 flush
-  process.stdout.write(`\n会话历史已保存到 ${cwd}/.ao/sessions/${thread.sessionId}/${thread.threadId}.jsonl\n`);
+  writeLine(`\n会话历史已保存到 ${cwd}/.ao/sessions/${thread.sessionId}/${thread.threadId}.jsonl`);
   process.exit(0);
+}
+
+function writeLine(text: string): void {
+  writeSync(process.stdout.fd, `${text}\n`);
 }
 
 function createApprovalGate(_useMock: boolean, mode: "auto" | "deny"): ApprovalGate {

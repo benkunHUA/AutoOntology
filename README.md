@@ -32,7 +32,8 @@ pnpm cli
 可用 `--config <path>` 指定配置文件；`approval` 可设为 `auto` 或 `deny`，`skills` 可设为 `true` 或 `false`。
 
 REPL 操作：直接输入即提交；回合进行中输入会自动「插话」；
-`/abort` 中断当前回合；`/quit` 退出。会话历史以 JSONL 追加写入 `.ao/sessions/`。
+`/abort` 中断当前回合；`/new` 新建会话；`/compact` 压缩上下文；`/quit` 退出。
+会话历史以 JSONL 追加写入 `.ao/sessions/`。
 
 ## 技能（Skills）
 
@@ -51,12 +52,13 @@ packages/
 ├── protocol/   契约层：历史条目、采样/会话事件、工具接口（零依赖）
 ├── api/        采样层：SSE 解析、Responses 客户端、重试、Mock
 ├── core/       引擎层：提交循环、回合、工具调度、持久化、扩展钩子
+├── commands/   命令层：斜杠命令声明 / 发现 / 分发 / 执行（零依赖）
 ├── tools/      工具层：exec_command / read_file / write_file / list_dir
 └── cli/        客户端：REPL + 事件渲染
 ```
 
-依赖方向严格单向：`cli → core → api → protocol`，`core → tools` 仅经
-`protocol` 的接口。
+依赖方向严格单向：`cli → core → api → protocol`，`cli → commands`；
+`core → tools` 仅经 `protocol` 的接口。
 
 ## 开发
 

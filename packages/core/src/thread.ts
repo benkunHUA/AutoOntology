@@ -71,4 +71,8 @@ export class Thread {
   whenIdle(): ReturnType<Session["whenIdle"]> {
     return this.session.whenIdle();
   }
+
+  compact(signal?: AbortSignal): ReturnType<Session["compact"]> {
+    return this.session.compact(signal);
+  }
 }

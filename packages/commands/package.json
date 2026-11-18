@@ -1,0 +1,12 @@
+{
+  "name": "@ao/commands",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ao/core": "workspace:*"
+  }
+}

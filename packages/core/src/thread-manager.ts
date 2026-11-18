@@ -15,11 +15,23 @@ export interface SpawnChildOptions
 
 export class ThreadManager {
   private readonly threads = new Map<ThreadId, Thread>();
+  private rootOptions: ThreadOptions | null = null;
+  private currentId: ThreadId | null = null;
 
   createRoot(options: ThreadOptions): Thread {
+    this.rootOptions = options;
     const thread = new Thread(options);
     this.threads.set(thread.threadId, thread);
+    this.currentId = thread.threadId;
     return thread;
+  }
+
+  /** 按最近一次根线程配置再建一个根线程，并切换为当前线程。 */
+  createRootLike(): Thread {
+    if (!this.rootOptions) {
+      throw new Error("没有可复用的根线程配置");
+    }
+    return this.createRoot(this.rootOptions);
   }
 
   spawnChild(parent: Thread, options: SpawnChildOptions): Thread {
@@ -39,5 +51,13 @@ export class ThreadManager {
 
   get size(): number {
     return this.threads.size;
+  }
+
+  get currentThreadId(): ThreadId | undefined {
+    return this.currentId ?? undefined;
+  }
+
+  current(): Thread | undefined {
+    return this.currentId ? this.threads.get(this.currentId) : undefined;
   }
 }

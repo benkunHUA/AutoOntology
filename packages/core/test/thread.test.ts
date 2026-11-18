@@ -93,4 +93,28 @@ describe("Thread", () => {
     expect(child.identity.parentThreadId).toBe(root.threadId);
     expect(child.identity.forkedFromThreadId).toBe(root.threadId);
   });
+
+  it("ThreadManager 维护当前根线程，并按模板创建下一个根线程", () => {
+    const manager = new ThreadManager();
+    const options = {
+      cwd: "/tmp",
+      model: "test",
+      instructions: "",
+      client: idleClient(),
+      handlers: [],
+      emit: () => {},
+    };
+    const root = manager.createRoot(options);
+
+    expect(manager.current()).toBe(root);
+    expect(manager.currentThreadId).toBe(root.threadId);
+
+    const next = manager.createRootLike();
+
+    expect(next).not.toBe(root);
+    expect(manager.current()).toBe(next);
+    expect(manager.currentThreadId).toBe(next.threadId);
+    expect(manager.size).toBe(2);
+    expect(next.settings).toEqual(root.settings);
+  });
 });
