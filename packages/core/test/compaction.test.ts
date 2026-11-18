@@ -13,7 +13,7 @@ import {
   ContextCompactor,
   ToolResultStore,
   TranscriptArchive,
-} from "../src/compaction.ts";
+} from "../src/compaction/index.ts";
 
 function summaryClient(summary: string): ModelClient {
   return {

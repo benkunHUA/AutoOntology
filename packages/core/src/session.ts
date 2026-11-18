@@ -34,7 +34,7 @@ import {
   ContextCompactor,
   ToolResultStore,
   TranscriptArchive,
-} from "./compaction.ts";
+} from "./compaction/index.ts";
 import { AbortedError } from "./errors.ts";
 import type { AbortReason } from "./errors.ts";
 import { RegularTask } from "./tasks/regular.ts";

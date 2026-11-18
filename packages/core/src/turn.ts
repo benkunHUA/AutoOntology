@@ -26,7 +26,7 @@ import type { ToolRouter } from "./tools/router.ts";
 import { ToolOrchestrator } from "./tools/orchestrator.ts";
 import { createSandboxManager } from "./tools/sandbox.ts";
 import { ToolCallRuntime } from "./tools/runtime.ts";
-import { MAX_REACTIVE_RETRIES, type ContextCompactor } from "./compaction.ts";
+import { MAX_REACTIVE_RETRIES, type ContextCompactor } from "./compaction/index.ts";
 import { injectSkillMentions, prepareTurnSkills } from "./skills.ts";
 import {
   defaultWorldStateContributors,
