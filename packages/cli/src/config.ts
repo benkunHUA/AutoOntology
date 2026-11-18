@@ -51,10 +51,11 @@ export async function loadConfigFile(
 }
 
 export function resolveConfig(file: ConfigFile): AppConfig {
+  const env = process.env;
   return {
-    apiKey: file.api_key ?? "",
-    modelName: file.model_name ?? DEFAULT_MODEL,
-    baseUrl: file.base_url ?? DEFAULT_BASE_URL,
+    apiKey: file.api_key ?? env.OPENAI_API_KEY ?? env.AO_API_KEY ?? "",
+    modelName: file.model_name ?? env.AO_MODEL ?? DEFAULT_MODEL,
+    baseUrl: file.base_url ?? env.AO_BASE_URL ?? DEFAULT_BASE_URL,
     approval: file.approval,
     skills: file.skills ?? true,
   };

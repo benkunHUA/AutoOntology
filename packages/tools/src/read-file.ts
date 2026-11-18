@@ -1,5 +1,5 @@
 import { readFile as fsReadFile } from "node:fs/promises";
-import { resolveWorkspacePath } from "./workspace-path.ts";
+import { resolveWorkspacePathSafe } from "./workspace-path.ts";
 import { defineTool } from "./define-tool.ts";
 
 const MAX_CHARS = 60_000;
@@ -23,16 +23,12 @@ export const readFile = defineTool({
     escalateOnFailure: () => true,
   },
   approvable: {
-    sandboxPermissions: () => "use_default",
-    shouldBypassApproval: (policy, alreadyApproved) =>
-      alreadyApproved || policy === "never",
     execApprovalRequirement: () => "skip",
-    wantsNoSandboxApproval: () => false,
     approvalAction: (args) => `read ${String(args.path ?? "")}`,
   },
 
   async run(args, ctx) {
-    const resolved = resolveWorkspacePath(ctx.cwd, String(args.path ?? ""));
+    const resolved = await resolveWorkspacePathSafe(ctx.cwd, String(args.path ?? ""));
     if (!resolved.ok) {
       return { ok: false, output: resolved.reason };
     }

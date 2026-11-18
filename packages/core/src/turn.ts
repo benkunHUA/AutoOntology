@@ -232,13 +232,14 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
     for (const { call, result } of collected) {
       history.append(functionCallOutput(call.callId, result.output, result.ok));
     }
+    const historyBeforeBatch = history.serialize();
     const afterBatch = await compactor.afterBatch(
-      history.serialize(),
+      historyBeforeBatch,
       collected.map(({ call }) => call.name),
       activeRequest,
       signal,
     );
-    if (JSON.stringify(afterBatch) !== JSON.stringify(history.serialize())) {
+    if (JSON.stringify(afterBatch) !== JSON.stringify(historyBeforeBatch)) {
       history.replaceAll(afterBatch);
       worldState.resetBaseline();
     }

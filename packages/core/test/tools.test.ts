@@ -31,11 +31,7 @@ function noopHandler(name: string, spec: Partial<ToolHandler["spec"]> = {}): Too
 
 function approvalRequirement(requirement: Approvable["execApprovalRequirement"]): Approvable {
   return {
-    sandboxPermissions: () => "use_default",
-    shouldBypassApproval: (policy, alreadyApproved) =>
-      alreadyApproved || policy === "never",
     execApprovalRequirement: requirement,
-    wantsNoSandboxApproval: () => false,
     approvalAction: () => "test action",
   };
 }

@@ -17,14 +17,6 @@ export type ToolExposure = "direct" | "deferred" | "codeModeOnly" | "hidden";
 
 export type SandboxPreference = "default" | "unsandboxed" | "sandboxed";
 
-export type SandboxPermissions =
-  | "use_default"
-  | "no_override"
-  | "bypass_sandbox_first_attempt"
-  | "escalated_sandbox_with_restrictions";
-
-export type ApprovalPolicy = "never" | "on_request" | "granular" | "unless_trusted";
-
 export type ExecApprovalRequirement =
   | "skip"
   | "needs_approval"
@@ -104,12 +96,9 @@ export interface Sandboxable {
 }
 
 export interface Approvable {
-  sandboxPermissions(args: Record<string, unknown>): SandboxPermissions;
-  shouldBypassApproval(policy: ApprovalPolicy, alreadyApproved: boolean): boolean;
   execApprovalRequirement(
     args: Record<string, unknown>,
   ): ExecApprovalRequirement | undefined;
-  wantsNoSandboxApproval(policy: ApprovalPolicy): boolean;
   approvalAction(args: Record<string, unknown>, callId: string): string;
 }
 

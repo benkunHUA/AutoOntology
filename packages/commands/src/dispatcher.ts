@@ -36,7 +36,7 @@ export class SlashCommandDispatcher {
     if (parsed.args.trim() !== "" && command.supportsInlineArgs !== true) {
       return { ok: false, output: `/${command.name} 不支持参数` };
     }
-    const thread = context.threadManager.get(context.threadId);
+    const thread = context.host.get(context.threadId);
     if (thread?.isBusy && command.availableDuringTask !== true) {
       return {
         ok: false,

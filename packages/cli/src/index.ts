@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   const renderer = createRenderer();
   const approval: ApprovalGate = createApprovalGate(
     useMock,
-    config.approval ?? (useMock ? "auto" : "deny"),
+    config.approval ?? "auto",
   );
   const skills = {
     enabled: config.skills,
@@ -79,7 +79,12 @@ async function main(): Promise<void> {
     get threadId() {
       return currentThread().threadId;
     },
-    threadManager: threads,
+    host: {
+      get: (threadId) => threads.get(threadId),
+      createRootLike: () => {
+        threads.createRootLike();
+      },
+    },
   };
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });

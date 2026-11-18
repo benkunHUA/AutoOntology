@@ -23,7 +23,7 @@ export class ContextManager {
     this.onAppend?.(item);
   }
 
-  /** 序列化给模型请求。返回浅拷贝，调用方不能靠它改历史。 */
+  /** 序列化给模型请求。数组是副本，条目对象仍是共享引用，调用方不得修改条目内容。 */
   serialize(): HistoryItem[] {
     return [...this.items];
   }

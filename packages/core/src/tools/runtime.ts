@@ -119,11 +119,6 @@ export class ToolCallRuntime {
     return collected;
   }
 
-  /** 已派发的全部调用（收尾时判定「是否每个调用都有结果」用）。 */
-  dispatchedCalls(): FunctionCallItem[] {
-    return this.ordered.map((e) => e.call);
-  }
-
   private async runOne(
     resolved: ResolvedToolCall,
     signal: AbortSignal,

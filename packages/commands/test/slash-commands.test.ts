@@ -10,6 +10,8 @@ import {
   SlashCommandDispatcher,
   discoverSlashCommands,
   parseSlashCommand,
+  type CommandHost,
+  type CommandThread,
   type SlashCommandContext,
 } from "../src/index.ts";
 
@@ -50,7 +52,7 @@ function rootThread(client: ModelClient): { manager: ThreadManager; thread: Thre
 }
 
 function contextOf(manager: ThreadManager, thread: Thread): SlashCommandContext {
-  return { threadId: thread.threadId, threadManager: manager };
+  return { threadId: thread.threadId, host: manager };
 }
 
 describe("slash command model", () => {
@@ -152,13 +154,14 @@ describe("slash command dispatcher", () => {
 
   it("rejects commands that are unavailable while a task is running", async () => {
     const dispatcher = new SlashCommandDispatcher(discoverSlashCommands());
-    const threadManager = {
-      get: () => ({ isBusy: true } as Thread),
-    } as unknown as ThreadManager;
+    const host: CommandHost = {
+      get: () => ({ isBusy: true } as CommandThread),
+      createRootLike: () => {},
+    };
 
     const result = await dispatcher.dispatch(
       "/compact",
-      { threadId: "thread-1", threadManager },
+      { threadId: "thread-1", host },
     );
 
     expect(result).toEqual({

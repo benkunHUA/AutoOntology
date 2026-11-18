@@ -30,6 +30,7 @@ pnpm cli
 ```
 
 可用 `--config <path>` 指定配置文件；`approval` 可设为 `auto` 或 `deny`，`skills` 可设为 `true` 或 `false`。
+密钥也可通过 `OPENAI_API_KEY` / `AO_API_KEY` 环境变量注入，避免写入配置文件。
 
 REPL 操作：直接输入即提交；回合进行中输入会自动「插话」；
 `/abort` 中断当前回合；`/new` 新建会话；`/compact` 压缩上下文；`/quit` 退出。

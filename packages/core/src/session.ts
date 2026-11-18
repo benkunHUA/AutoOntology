@@ -104,6 +104,7 @@ export class Session {
   private turnSeq = 0;
   private idleWaiters: Array<() => void> = [];
   private submissionTail: Promise<void> = Promise.resolve();
+  private lastUserRequest = "";
 
   constructor(options: SessionOptions) {
     this.options = options;
@@ -229,13 +230,18 @@ export class Session {
       stats: { firstTokenAt: null, toolCalls: 0 },
     };
 
-    active.done = this.runTask(active, text).finally(() => this.onTaskFinished(active));
+    active.done = this.runTask(active, text);
     this.active = active;
   }
 
-  private async runTask(active: ActiveTurn, initialText: string): Promise<void> {
+  private async runTask(
+    active: ActiveTurn,
+    initialText: string,
+  ): Promise<void> {
+    let result: TurnResult | null = null;
+    let error: unknown = null;
     try {
-      const result = await active.task.run({
+      result = await active.task.run({
         turn: active.context,
         initialText,
         history: this.history,
@@ -253,23 +259,20 @@ export class Session {
           ? { runtime: this.skillRuntime }
           : undefined,
       });
-      this.pendingResult = result;
-    } catch (error) {
-      this.pendingError = error;
+    } catch (caught) {
+      error = caught;
     }
+    await this.onTaskFinished(active, result, error);
   }
 
-  private pendingResult: TurnResult | null = null;
-  private pendingError: unknown = null;
-
-  private async onTaskFinished(active: ActiveTurn): Promise<void> {
+  private async onTaskFinished(
+    active: ActiveTurn,
+    result: TurnResult | null,
+    error: unknown,
+  ): Promise<void> {
     const { context, controller, startedAt, stats } = active;
     const durationMs = Date.now() - startedAt;
     const aborted = controller.signal.aborted;
-    const error = this.pendingError;
-    const result = this.pendingResult;
-    this.pendingError = null;
-    this.pendingResult = null;
 
     // 1. 判定结局（收工第 1 步）
     let outcome: "completed" | "aborted" | "error" = "completed";
@@ -360,18 +363,7 @@ export class Session {
   }
 
   private currentRequest(): string {
-    const items = this.history.serialize();
-    for (let index = items.length - 1; index >= 0; index--) {
-      const item = items[index];
-      if (
-        item.type === "message" &&
-        item.role === "user" &&
-        !item.text.startsWith("[")
-      ) {
-        return item.text;
-      }
-    }
-    return "";
+    return this.lastUserRequest;
   }
 
   private dispatchSubmission(
@@ -384,15 +376,18 @@ export class Session {
       if (mode === "steer") {
         if (active.task.kind !== "regular") return "rejected";
         this.inputQueue.push(text);
+        this.lastUserRequest = text;
         return "steered";
       }
       // start-or-steer：仅普通回合可插话，评审/压缩回合拒绝。
       if (active.task.kind !== "regular") return "rejected";
       this.inputQueue.push(text);
+      this.lastUserRequest = text;
       return "steered";
     }
     if (mode === "steer") return "rejected";
     // continue-if-idle 用于内部续接，行为等同空闲时开新单。
+    this.lastUserRequest = text;
     this.startTurn(text);
     return "started";
   }

@@ -9,6 +9,4 @@ import type { RunTurnDeps, TurnResult } from "../turn.ts";
 export interface SessionTask {
   readonly kind: "regular" | "review" | "compact";
   run(deps: RunTurnDeps): Promise<TurnResult>;
-  /** 可选的任务级清理；默认取消令牌已足以让 run 收手。 */
-  abort?(): void;
 }

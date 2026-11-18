@@ -1,7 +1,7 @@
 /** write_file：独占工具（默认写锁），创建或覆盖文件。 */
 import { mkdir, writeFile as fsWriteFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { resolveWorkspacePath } from "./workspace-path.ts";
+import { resolveWorkspacePathSafe } from "./workspace-path.ts";
 import { defineTool } from "./define-tool.ts";
 
 export const writeFile = defineTool({
@@ -24,16 +24,16 @@ export const writeFile = defineTool({
     escalateOnFailure: () => true,
   },
   approvable: {
-    sandboxPermissions: () => "use_default",
-    shouldBypassApproval: (policy, alreadyApproved) =>
-      alreadyApproved || policy === "never",
     execApprovalRequirement: () => "needs_approval",
-    wantsNoSandboxApproval: () => false,
     approvalAction: (args) => `write ${String(args.path ?? "")}`,
   },
 
   async run(args, ctx) {
-    const resolved = resolveWorkspacePath(ctx.cwd, String(args.path ?? ""));
+    const resolved = await resolveWorkspacePathSafe(
+      ctx.cwd,
+      String(args.path ?? ""),
+      { allowMissing: true },
+    );
     if (!resolved.ok) {
       return { ok: false, output: resolved.reason };
     }

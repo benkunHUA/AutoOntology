@@ -16,11 +16,24 @@ export interface SlashCommandResult {
   exit?: boolean;
 }
 
-import type { ThreadManager } from "@ao/core";
+/**
+ * 命令宿主：commands 只依赖这个最小接口，宿主（CLI/TUI）负责把
+ * 自己的线程管理实现适配进来，避免命令层反向依赖 core。
+ */
+export interface CommandThread {
+  readonly isBusy: boolean;
+  abort(reason?: "user"): Promise<void>;
+  compact(): Promise<{ compacted: boolean; summary?: string }>;
+}
+
+export interface CommandHost {
+  get(threadId: string): CommandThread | undefined;
+  createRootLike(): void;
+}
 
 export interface SlashCommandContext {
   readonly threadId: string;
-  readonly threadManager: ThreadManager;
+  readonly host: CommandHost;
 }
 
 export type SlashCommandExecutor = (

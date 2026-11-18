@@ -59,6 +59,24 @@ describe("createSkillTools", () => {
     expect(JSON.parse(okResult.output).contents).toContain("# body 0");
   });
 
+  it("skills_read 拒绝读取技能目录之外的文件", async () => {
+    const runtime = await runtimeWith(1);
+    await runtime.prepareStep({ cwd: "/tmp" });
+    const tools = createSkillTools(runtime);
+    const read = tools.find((tool) => tool.spec.name === "skills_read")!;
+    const entry = runtime.currentStep!.catalog.entries[0];
+
+    const secret = join(await mkdtemp(join(tmpdir(), "ao-outside-")), "secret.txt");
+    await writeFile(secret, "outside secret", "utf8");
+
+    const result = await read.execute(
+      { package: entry.id, resource: secret },
+      ctx(),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("escapes");
+  });
+
   it("未准备时返回错误", async () => {
     const runtime = await runtimeWith(0);
     const tools = createSkillTools(runtime);

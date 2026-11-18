@@ -5,7 +5,7 @@
  */
 import { execFile } from "node:child_process";
 import type { ToolResult } from "@ao/protocol";
-import { resolveWorkspacePath } from "./workspace-path.ts";
+import { resolveWorkspacePathSafe } from "./workspace-path.ts";
 import { defineTool } from "./define-tool.ts";
 
 const TIMEOUT_MS = 120_000;
@@ -36,19 +36,15 @@ export const execCommand = defineTool({
     escalateOnFailure: () => true,
   },
   approvable: {
-    sandboxPermissions: () => "use_default",
-    shouldBypassApproval: (policy, alreadyApproved) =>
-      alreadyApproved || policy === "never",
     execApprovalRequirement: () => "needs_approval",
-    wantsNoSandboxApproval: () => false,
     approvalAction: (args, callId) => `exec ${callId}: ${String(args.cmd ?? "")}`,
   },
 
-  run(args, ctx) {
+  async run(args, ctx) {
     const cmd = String(args.cmd ?? "");
     if (!cmd) return Promise.resolve({ ok: false, output: "cmd is required" });
     const requested = typeof args.workdir === "string" ? args.workdir : "";
-    const resolved = resolveWorkspacePath(ctx.cwd, requested);
+    const resolved = await resolveWorkspacePathSafe(ctx.cwd, requested);
     if (!resolved.ok) {
       return Promise.resolve({ ok: false, output: resolved.reason });
     }

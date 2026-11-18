@@ -82,11 +82,15 @@ export class ResponsesClient implements ModelClient {
     }
 
     const textDeltas = new Map<number, string>();
+    let sentinelDone = false;
 
     try {
       for await (const data of parseSse(response.body)) {
         idle.ping();
-        if (data === "[DONE]") break;
+        if (data === "[DONE]") {
+          sentinelDone = true;
+          break;
+        }
 
         let raw: any;
         try {
@@ -154,6 +158,7 @@ export class ResponsesClient implements ModelClient {
             break;
         }
       }
+      if (sentinelDone) return;
       // 流被服务端提前关闭：视为传输错误，交给重试层
       throw new TransportError("stream closed before response.completed", {
         retryable: true,

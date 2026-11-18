@@ -19,7 +19,7 @@ export const abortCommand: SlashCommandSpec = {
   description: "中断当前回合",
   availableDuringTask: true,
   async execute(context) {
-    const thread = context.threadManager.get(context.threadId);
+    const thread = context.host.get(context.threadId);
     if (!thread) {
       return { ok: false, output: "当前线程不存在。" };
     }
@@ -35,7 +35,7 @@ export const newThreadCommand: SlashCommandSpec = {
   name: "new",
   description: "新建会话",
   async execute(context) {
-    context.threadManager.createRootLike();
+    context.host.createRootLike();
     return { ok: true, output: "已新建会话。" };
   },
 };
@@ -45,7 +45,7 @@ export const compactCommand: SlashCommandSpec = {
   aliases: ["compress"],
   description: "压缩对话上下文，避免达到上下文上限",
   async execute(context) {
-    const thread = context.threadManager.get(context.threadId);
+    const thread = context.host.get(context.threadId);
     if (!thread) {
       return { ok: false, output: "当前线程不存在。" };
     }

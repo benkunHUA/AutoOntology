@@ -87,10 +87,17 @@ export class EnvironmentWorldStateContributor implements WorldStateContributor {
       },
       {
         key: "shell",
-        text: process.platform === "win32" ? "powershell" : "zsh",
+        text: detectShell(),
       },
     ];
   }
+}
+
+function detectShell(): string {
+  if (process.platform === "win32") return "powershell";
+  const fromEnv = process.env.SHELL ?? "";
+  const name = fromEnv.split("/").pop() ?? "";
+  return name || (process.platform === "linux" ? "bash" : "sh");
 }
 
 /** 内置 contributor：本步可见的工具目录。 */

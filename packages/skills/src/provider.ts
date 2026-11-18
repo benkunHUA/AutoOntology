@@ -5,7 +5,8 @@
  * 读取时校验 UTF-8，并按 1 MiB 上限截断。
  */
 import { isUtf8 } from "node:buffer";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
+import { dirname, sep } from "node:path";
 import { SkillCatalog } from "./catalog.ts";
 import { discoverSkills } from "./discovery.ts";
 import { SKILL_RESOURCE_BYTES } from "./limits.ts";
@@ -39,6 +40,7 @@ export class HostSkillProvider {
   }
 
   async read(request: SkillReadRequest): Promise<SkillReadResult> {
+    await this.assertResourceInsideSkill(request);
     const buffer = await readFile(request.resource);
     if (!isUtf8(buffer)) throw new Error("skill resource is not valid UTF-8");
     const capped = truncateBufferUtf8(buffer, SKILL_RESOURCE_BYTES);
@@ -49,6 +51,18 @@ export class HostSkillProvider {
     };
   }
 
+  private async assertResourceInsideSkill(
+    request: SkillReadRequest,
+  ): Promise<void> {
+    const [skillDir, resourcePath] = await Promise.all([
+      realpath(dirname(request.entry.mainPrompt)),
+      realpath(request.resource),
+    ]);
+    if (resourcePath === skillDir) return;
+    if (!resourcePath.startsWith(skillDir + sep)) {
+      throw new Error("skill resource escapes its skill directory");
+    }
+  }
 }
 
 function hostEntry(skill: {

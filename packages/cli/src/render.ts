@@ -11,7 +11,6 @@ const RED = (s: string) => `\x1b[31m${s}\x1b[0m`;
 
 export function createRenderer(): {
   render(event: SessionEvent): void;
-  endLine(): void;
 } {
   let streaming = false;
 
@@ -88,7 +87,6 @@ export function createRenderer(): {
           break;
       }
     },
-    endLine: finishLine,
   };
 }
 

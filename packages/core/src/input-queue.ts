@@ -11,11 +11,9 @@ export interface PendingInput {
 
 export class InputQueue {
   private items: PendingInput[] = [];
-  private activityListeners = new Set<(pending: number) => void>();
 
   push(text: string): void {
     this.items.push({ text, at: new Date().toISOString() });
-    for (const listener of this.activityListeners) listener(this.items.length);
   }
 
   /** 取走全部待处理输入（步骤边界调用）。 */
@@ -36,10 +34,5 @@ export class InputQueue {
 
   get size(): number {
     return this.items.length;
-  }
-
-  onActivity(listener: (pending: number) => void): () => void {
-    this.activityListeners.add(listener);
-    return () => this.activityListeners.delete(listener);
   }
 }
