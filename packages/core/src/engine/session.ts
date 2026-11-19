@@ -123,9 +123,9 @@ export class Session {
   private idleWaiters: Array<() => void> = [];
   private submissionTail: Promise<void> = Promise.resolve();
   private lastUserRequest = "";
-  private window: number;
-  private windowId: string;
-  private previousWindowId: string | undefined;
+  private contextWindowNumber: number;
+  private contextWindowId: string;
+  private previousContextWindowId: string | undefined;
 
   constructor(options: SessionOptions) {
     this.options = options;
@@ -139,9 +139,9 @@ export class Session {
       forkedFromThreadId,
     });
     this.persistence = options.persistence ?? createStore(options, this.identity);
-    this.window = options.window ?? 0;
-    this.windowId = options.windowId ?? crypto.randomUUID();
-    this.previousWindowId = options.previousWindowId;
+    this.contextWindowNumber = options.window ?? 0;
+    this.contextWindowId = options.windowId ?? crypto.randomUUID();
+    this.previousContextWindowId = options.previousWindowId;
     this.skillRuntime = createSkillRuntime(options.skills);
     this.router = new ToolRouter([
       ...options.handlers,
@@ -392,13 +392,13 @@ export class Session {
           event.markerText,
         );
       } else if (event.type === "compaction") {
-        this.previousWindowId = this.windowId;
-        this.windowId = crypto.randomUUID();
-        this.window += 1;
+        this.previousContextWindowId = this.contextWindowId;
+        this.contextWindowId = crypto.randomUUID();
+        this.contextWindowNumber += 1;
         this.persistence.appendCheckpoint({
-          window: this.window,
-          windowId: this.windowId,
-          previousWindowId: this.previousWindowId,
+          window: this.contextWindowNumber,
+          windowId: this.contextWindowId,
+          previousWindowId: this.previousContextWindowId,
           summary: event.summary,
           replacementHistory: event.replacementHistory,
         });
