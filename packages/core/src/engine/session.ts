@@ -77,9 +77,9 @@ export interface SessionOptions {
   identity?: ThreadIdentity;
   /** 已恢复的初始历史；由 Session.open 注入。 */
   initialHistory?: HistoryItem[];
-  window?: number;
-  windowId?: string;
-  previousWindowId?: string;
+  contextWindowNumber?: number;
+  contextWindowId?: string;
+  previousContextWindowId?: string;
   /** 压缩归档目录；缺省从 persistenceDir 或 cwd/.ao 推导。 */
   compactionDir?: string;
   /** 命令执行沙箱的权限基线；缺省由编排器按 cwd 推导。 */
@@ -139,9 +139,9 @@ export class Session {
       forkedFromThreadId,
     });
     this.persistence = options.persistence ?? createStore(options, this.identity);
-    this.contextWindowNumber = options.window ?? 0;
-    this.contextWindowId = options.windowId ?? crypto.randomUUID();
-    this.previousContextWindowId = options.previousWindowId;
+    this.contextWindowNumber = options.contextWindowNumber ?? 0;
+    this.contextWindowId = options.contextWindowId ?? crypto.randomUUID();
+    this.previousContextWindowId = options.previousContextWindowId;
     this.skillRuntime = createSkillRuntime(options.skills);
     this.router = new ToolRouter([
       ...options.handlers,
@@ -196,9 +196,9 @@ export class Session {
       identity,
       persistence: store,
       initialHistory: loaded.history,
-      window: loaded.window,
-      windowId: loaded.windowId || crypto.randomUUID(),
-      previousWindowId: loaded.previousWindowId,
+      contextWindowNumber: loaded.window,
+      contextWindowId: loaded.windowId || crypto.randomUUID(),
+      previousContextWindowId: loaded.previousWindowId,
     });
   }
 
