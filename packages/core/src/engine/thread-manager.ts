@@ -58,7 +58,7 @@ export class ThreadManager implements AgentControl {
 
   constructor(options: ThreadManagerOptions = {}) {
     this.maxThreads = options.maxThreads ?? 9;
-    this.maxDepth = options.maxDepth ?? 4;
+    this.maxDepth = options.maxDepth ?? 2;
   }
 
   createRoot(options: ThreadOptions): Thread {
@@ -67,7 +67,7 @@ export class ThreadManager implements AgentControl {
       ...options,
       agentPath: options.agentPath ?? ROOT_AGENT_PATH,
       agentRole: options.agentRole ?? "root",
-      depth: options.depth ?? 0,
+      depth: options.depth ?? 1,
     });
     this.currentId = thread.threadId;
     return thread;
@@ -94,9 +94,14 @@ export class ThreadManager implements AgentControl {
     if (depth > this.maxDepth) {
       throw new Error(`agent depth limit reached (${this.maxDepth})`);
     }
+    const handlers =
+      depth >= this.maxDepth
+        ? options.handlers.filter((handler) => handler.spec.name !== "spawn_agent")
+        : options.handlers;
 
     return this.attach({
       ...options,
+      handlers,
       sessionId: parent.sessionId,
       parentThreadId: parent.threadId,
       forkedFromThreadId: options.forkedFromThreadId ?? parent.threadId,
@@ -132,22 +137,20 @@ export class ThreadManager implements AgentControl {
     if (request.message.trim() === "") {
       throw new Error("empty message can't be sent to an agent");
     }
-    if (!isValidAgentName(request.taskName)) {
-      throw new Error(`invalid agent name: ${request.taskName}`);
+    if (!isValidAgentName(request.pathName)) {
+      throw new Error(`invalid agent name: ${request.pathName}`);
     }
 
-    const agentPath = joinAgentPath(parent.agentPath, request.taskName);
+    const agentPath = joinAgentPath(parent.agentPath, request.pathName);
     if (this.paths.has(agentPath)) {
       throw new Error(`agent path already exists: ${agentPath}`);
     }
 
     const inherited = parent.childOptions();
-    const roleName = request.agentType?.trim();
-    const role = roleName ? inherited.agentRoles?.[roleName] : undefined;
+    const roleName = request.roleName?.trim();
     const child = this.spawnChild(parent, {
       ...inherited,
-      model: request.model ?? role?.model ?? parent.settings.model,
-      instructions: role?.instructions ?? inherited.instructions,
+      model: request.model ?? parent.settings.model,
       agentPath,
       agentRole: roleName || "subagent",
       depth: parent.depth + 1,
@@ -223,10 +226,16 @@ export class ThreadManager implements AgentControl {
     caller: AgentCaller,
     timeoutMs: number,
     signal: AbortSignal,
+    expectedTarget: string,
   ): Promise<WaitAgentResult> {
+    const expectedSourcePath = resolveAgentPath(
+      caller.agentPath,
+      expectedTarget,
+    );
     return this.requireThread(caller.threadId).session.waitForPendingInput(
       signal,
       timeoutMs,
+      expectedSourcePath,
     );
   }
 

@@ -24,17 +24,14 @@ export interface AgentCaller {
 }
 
 export interface SpawnAgentRequest {
-  readonly taskName: string;
+  /** 当前 agent 路径下追加的子路径名。 */
+  readonly pathName: string;
   readonly message: string;
-  readonly agentType?: string;
+  /** 角色配置名，缺省为 subagent。 */
+  readonly roleName?: string;
   readonly model?: string;
   /** 是否继承父线程历史；false 时子线程从空历史开始。 */
   readonly forkHistory?: boolean;
-}
-
-export interface AgentRoleConfig {
-  readonly instructions?: string;
-  readonly model?: string;
 }
 
 export interface SpawnAgentReceipt {
@@ -72,6 +69,8 @@ export interface WaitAgentResult {
   readonly message: string;
   readonly timedOut: boolean;
   readonly activity: WaitAgentActivity;
+  /** 触发等待的 agent 消息来源路径；activity 为 mailbox 时存在。 */
+  readonly sourcePath?: AgentPath;
 }
 
 export interface AgentControl {
@@ -96,6 +95,7 @@ export interface AgentControl {
     caller: AgentCaller,
     timeoutMs: number,
     signal: AbortSignal,
+    expectedTarget: string,
   ): Promise<WaitAgentResult>;
 }
 

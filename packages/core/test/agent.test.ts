@@ -70,14 +70,14 @@ describe("ThreadManager subagent control", () => {
         sessionId: root.sessionId,
         agentPath: root.agentPath,
       },
-      { taskName: "worker", message: "do work" },
+      { pathName: "worker", message: "do work" },
     );
 
     const child = manager.get(receipt.threadId);
     expect(child).toBeDefined();
     expect(receipt.agentPath).toBe("/root/worker");
     expect(child!.agentRole).toBe("subagent");
-    expect(child!.depth).toBe(1);
+    expect(child!.depth).toBe(2);
     expect(child!.sessionId).toBe(root.sessionId);
 
     await child!.whenIdle();
@@ -114,7 +114,7 @@ describe("ThreadManager subagent control", () => {
       agentPath: root.agentPath,
     };
     const receipt = await manager.spawn(caller, {
-      taskName: "worker",
+      pathName: "worker",
       message: "initial",
     });
     const child = manager.get(receipt.threadId)!;
@@ -154,23 +154,91 @@ describe("ThreadManager subagent control", () => {
     };
     const signal = new AbortController().signal;
 
-    const mailboxWait = manager.waitForActivity(caller, 1_000, signal);
+    const mailboxWait = manager.waitForActivity(
+      caller,
+      1_000,
+      signal,
+      "worker",
+    );
     root.inputQueue.enqueueAgentMessage("completed", "/root/worker");
     await expect(mailboxWait).resolves.toMatchObject({ activity: "mailbox" });
     root.inputQueue.drain();
 
-    const steerWait = manager.waitForActivity(caller, 1_000, signal);
+    const steerWait = manager.waitForActivity(
+      caller,
+      1_000,
+      signal,
+      "worker",
+    );
     root.inputQueue.push("steer");
     await expect(steerWait).resolves.toMatchObject({ activity: "steer" });
   });
 
-  it("agent_type 可应用 role 级 model 覆盖", async () => {
+  it("waitForActivity 指定 target 后只响应匹配的 agent 消息", async () => {
     const manager = new ThreadManager();
+    const root = manager.createRoot(rootOptions(manager));
+    const caller = {
+      threadId: root.threadId,
+      sessionId: root.sessionId,
+      agentPath: root.agentPath,
+    };
+    const signal = new AbortController().signal;
+
+    const wait = manager.waitForActivity(caller, 1_000, signal, "worker");
+    root.inputQueue.enqueueAgentMessage("other done", "/root/other");
+    root.inputQueue.enqueueAgentMessage("worker done", "/root/worker");
+
+    await expect(wait).resolves.toMatchObject({
+      activity: "mailbox",
+      sourcePath: "/root/worker",
+    });
+  });
+
+  it("waitForActivity 忽略等待开始前已经存在的旧消息", async () => {
+    const manager = new ThreadManager();
+    const root = manager.createRoot(rootOptions(manager));
+    const caller = {
+      threadId: root.threadId,
+      sessionId: root.sessionId,
+      agentPath: root.agentPath,
+    };
+    const signal = new AbortController().signal;
+
+    root.inputQueue.enqueueAgentMessage("old result", "/root/worker");
+    const wait = manager.waitForActivity(caller, 1_000, signal, "worker");
+    let resolved = false;
+    void wait.then(() => {
+      resolved = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(resolved).toBe(false);
+
+    root.inputQueue.enqueueAgentMessage("new result", "/root/worker");
+    await expect(wait).resolves.toMatchObject({ activity: "mailbox" });
+  });
+
+  it("role_name 会记录为子 agent 角色", async () => {
+    const manager = new ThreadManager();
+    const root = manager.createRoot(rootOptions(manager));
+    const caller = {
+      threadId: root.threadId,
+      sessionId: root.sessionId,
+      agentPath: root.agentPath,
+    };
+
+    const receipt = await manager.spawn(caller, {
+      pathName: "explorer",
+      message: "explore",
+      roleName: "explorer",
+    });
+    expect(manager.get(receipt.threadId)!.agentRole).toBe("explorer");
+  });
+
+  it("达到最大深度后不再向子 agent 暴露 spawn_agent", async () => {
+    const manager = new ThreadManager({ maxDepth: 2 });
     const root = manager.createRoot({
       ...rootOptions(manager),
-      agentRoles: {
-        explorer: { model: "explorer-model" },
-      },
+      handlers: createSubagentToolHandlers(),
     });
     const caller = {
       threadId: root.threadId,
@@ -179,11 +247,12 @@ describe("ThreadManager subagent control", () => {
     };
 
     const receipt = await manager.spawn(caller, {
-      taskName: "explorer",
-      message: "explore",
-      agentType: "explorer",
+      pathName: "leaf",
+      message: "work",
     });
-    expect(manager.get(receipt.threadId)!.settings.model).toBe("explorer-model");
+    const leaf = manager.get(receipt.threadId)!;
+
+    expect(leaf.visibleToolNames()).not.toContain("spawn_agent");
   });
 });
 
@@ -245,7 +314,7 @@ describe("subagent tools through runTurn", () => {
             callId: "call_spawn",
             name: "spawn_agent",
             arguments: JSON.stringify({
-              task_name: "worker",
+              path_name: "worker",
               message: "do work",
             }),
           },
@@ -320,7 +389,7 @@ describe("subagent tool handlers", () => {
     } as unknown as ToolContext;
 
     const result = await handler.execute(
-      { task_name: "worker", message: "go" },
+      { path_name: "worker", message: "go" },
       ctx,
     );
     expect(result.ok).toBe(true);

@@ -6,7 +6,6 @@
  * ThreadManager 在这个门面上管理父子关系、mailbox 与并发准入。
  */
 import type {
-  AgentRoleConfig,
   SessionId,
   ThreadId,
   ThreadIdentity,
@@ -27,7 +26,6 @@ export interface ThreadOptions
   agentPath?: AgentPath;
   agentRole?: string;
   depth?: number;
-  agentRoles?: Record<string, AgentRoleConfig>;
 }
 
 export class Thread {
@@ -78,6 +76,10 @@ export class Thread {
 
   get inputQueue(): Session["inputQueue"] {
     return this.session.inputQueue;
+  }
+
+  visibleToolNames(): string[] {
+    return this.session.visibleToolNames();
   }
 
   /** 克隆本线程的启动配置，供子线程继承后再覆盖。 */

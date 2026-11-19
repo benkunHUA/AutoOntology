@@ -46,12 +46,29 @@ export class InputQueue {
     return this.items.length;
   }
 
-  hasAgentMessage(): boolean {
-    return this.items.some((item) => item.source === "agent");
+  hasAgentMessage(sourcePath?: string): boolean {
+    return this.findAgentMessage(sourcePath) !== undefined;
   }
 
-  hasUserInput(): boolean {
-    return this.items.some((item) => item.source === "user");
+  hasUserInput(fromIndex = 0): boolean {
+    return this.findUserInput(fromIndex) !== undefined;
+  }
+
+  findUserInput(fromIndex = 0): PendingInput | undefined {
+    return this.items
+      .slice(fromIndex)
+      .find((item) => item.source === "user");
+  }
+
+  findAgentMessage(
+    sourcePath?: string,
+    fromIndex = 0,
+  ): PendingInput | undefined {
+    return this.items.slice(fromIndex).find(
+      (item) =>
+        item.source === "agent" &&
+        (sourcePath === undefined || item.sourcePath === sourcePath),
+    );
   }
 
   /** 订阅活动变化；返回取消订阅函数。 */
@@ -61,7 +78,10 @@ export class InputQueue {
   }
 
   private enqueue(input: Omit<PendingInput, "at">): void {
-    this.items.push({ ...input, at: new Date().toISOString() });
+    this.items.push({
+      ...input,
+      at: new Date().toISOString(),
+    });
     for (const listener of this.listeners) listener();
   }
 }

@@ -218,6 +218,10 @@ export class Session {
     return this.options.agentPath ?? "/root";
   }
 
+  visibleToolNames(): string[] {
+    return this.router.modelVisibleSpecs().map((tool) => tool.name);
+  }
+
   /**
    * 唯一的串行提交入口。提交按到达顺序串行处理，避免并发写状态。
    */
@@ -287,16 +291,27 @@ export class Session {
   async waitForPendingInput(
     signal: AbortSignal,
     timeoutMs: number,
+    expectedSourcePath: string,
   ): Promise<WaitAgentResult> {
     if (signal.aborted) {
       throw signal.reason ?? new Error("aborted");
     }
     const queue = this.inputQueue;
-    if (queue.hasUserInput()) {
+    const waitStartIndex = queue.size;
+    if (queue.findUserInput(waitStartIndex)) {
       return { message: "Wait completed.", timedOut: false, activity: "steer" };
     }
-    if (queue.hasAgentMessage()) {
-      return { message: "Wait completed.", timedOut: false, activity: "mailbox" };
+    const waitingAgent = queue.findAgentMessage(
+      expectedSourcePath,
+      waitStartIndex,
+    );
+    if (waitingAgent) {
+      return {
+        message: "Wait completed.",
+        timedOut: false,
+        activity: "mailbox",
+        sourcePath: waitingAgent.sourcePath,
+      };
     }
 
     const deadline = Date.now() + timeoutMs;
@@ -330,12 +345,22 @@ export class Session {
           resolve({ message: "Wait timed out.", timedOut: true, activity: "timeout" });
           return;
         }
-        if (queue.hasUserInput()) {
+        if (queue.findUserInput(waitStartIndex)) {
           cleanup();
           resolve({ message: "Wait completed.", timedOut: false, activity: "steer" });
-        } else if (queue.hasAgentMessage()) {
+        } else {
+          const agent = queue.findAgentMessage(
+            expectedSourcePath,
+            waitStartIndex,
+          );
+          if (!agent) return;
           cleanup();
-          resolve({ message: "Wait completed.", timedOut: false, activity: "mailbox" });
+          resolve({
+            message: "Wait completed.",
+            timedOut: false,
+            activity: "mailbox",
+            sourcePath: agent.sourcePath,
+          });
         }
       }
 
