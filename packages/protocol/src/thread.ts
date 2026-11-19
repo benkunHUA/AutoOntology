@@ -22,11 +22,3 @@ export interface ThreadSettings {
   readonly cwd: string;
   readonly model: string;
 }
-
-export function newThreadId(): ThreadId {
-  return crypto.randomUUID();
-}
-
-export function newSessionId(): SessionId {
-  return crypto.randomUUID();
-}

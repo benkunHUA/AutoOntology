@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModelClient, ModelRequest, ResponseEvent, StreamOptions } from "@ao/protocol";
-import { Thread } from "../src/thread.ts";
-import { ThreadManager } from "../src/thread-manager.ts";
+import { Thread } from "../src/engine/thread.ts";
+import { ThreadManager } from "../src/engine/thread-manager.ts";
 
 function idleClient(): ModelClient {
   return {

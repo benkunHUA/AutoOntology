@@ -2,8 +2,8 @@ import { createSkillTools, SkillRuntime } from "@ao/skills";
 import type { SkillScope, SkillStepState } from "@ao/skills";
 import type { ToolHandler } from "@ao/protocol";
 import { message } from "@ao/protocol";
-import type { ContextManager } from "./context-manager.ts";
-import type { TurnContext } from "./turn-context.ts";
+import type { ContextManager } from "../context/context-manager.ts";
+import type { TurnContext } from "../engine/turn-context.ts";
 
 export interface SkillsOptions {
   enabled?: boolean;

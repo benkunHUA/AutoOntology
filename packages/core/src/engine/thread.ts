@@ -6,12 +6,15 @@
  * ThreadManager 在这个门面上管理父子关系、mailbox 与并发准入。
  */
 import type {
+  AgentRoleConfig,
   SessionId,
   ThreadId,
   ThreadIdentity,
   ThreadSettings,
+  AgentPath,
 } from "@ao/protocol";
-import { newSessionId, newThreadId } from "@ao/protocol";
+import { newId } from "../util/id.ts";
+import { ROOT_AGENT_PATH } from "../subagent/util/agent-path.ts";
 import type { Session, SessionOptions } from "./session.ts";
 import { Session as SessionEngine } from "./session.ts";
 
@@ -21,27 +24,44 @@ export interface ThreadOptions
   sessionId?: SessionId;
   parentThreadId?: ThreadId;
   forkedFromThreadId?: ThreadId;
+  agentPath?: AgentPath;
+  agentRole?: string;
+  depth?: number;
+  agentRoles?: Record<string, AgentRoleConfig>;
 }
 
 export class Thread {
   readonly identity: ThreadIdentity;
   readonly settings: ThreadSettings;
   readonly session: Session;
+  readonly agentPath: AgentPath;
+  readonly agentRole: string;
+  readonly depth: number;
 
-  constructor(options: ThreadOptions) {
-    const threadId = options.threadId ?? newThreadId();
+  private readonly options: ThreadOptions;
+
+  constructor(options: ThreadOptions, sessionOptions: ThreadOptions = options) {
+    this.options = options;
+    const threadId = options.threadId ?? newId();
     this.identity = Object.freeze({
       threadId,
-      sessionId: options.sessionId ?? newSessionId(),
+      sessionId: options.sessionId ?? newId(),
       rootThreadId: options.sessionId ?? threadId,
       parentThreadId: options.parentThreadId,
       forkedFromThreadId: options.forkedFromThreadId,
     });
+    this.agentPath = options.agentPath ?? ROOT_AGENT_PATH;
+    this.agentRole = options.agentRole ?? "root";
+    this.depth = options.depth ?? 0;
     this.settings = Object.freeze({
-      cwd: options.cwd,
-      model: options.model,
+      cwd: sessionOptions.cwd,
+      model: sessionOptions.model,
     });
-    this.session = new SessionEngine({ ...options, identity: this.identity });
+    this.session = new SessionEngine({
+      ...sessionOptions,
+      identity: this.identity,
+      agentPath: this.agentPath,
+    });
   }
 
   get threadId(): ThreadId {
@@ -54,6 +74,15 @@ export class Thread {
 
   get history(): Session["history"] {
     return this.session.history;
+  }
+
+  get inputQueue(): Session["inputQueue"] {
+    return this.session.inputQueue;
+  }
+
+  /** 克隆本线程的启动配置，供子线程继承后再覆盖。 */
+  childOptions(overrides: Partial<ThreadOptions> = {}): ThreadOptions {
+    return { ...this.options, ...overrides };
   }
 
   get isBusy(): boolean {

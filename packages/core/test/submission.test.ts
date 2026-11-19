@@ -6,8 +6,8 @@ import type {
   ResponseEvent,
   StreamOptions,
 } from "@ao/protocol";
-import type { AgentHooks } from "../src/hooks.ts";
-import { Session } from "../src/session.ts";
+import type { AgentHooks } from "../src/engine/hooks.ts";
+import { Session } from "../src/engine/session.ts";
 
 function oneShotClient(): ModelClient {
   return {

@@ -7,7 +7,7 @@ import type {
   ToolHandler,
   ToolResult,
 } from "@ao/protocol";
-import { Session } from "../src/session.ts";
+import { Session } from "../src/engine/session.ts";
 
 function blockedClient(): ModelClient {
   return {

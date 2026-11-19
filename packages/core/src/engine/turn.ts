@@ -14,30 +14,31 @@ import {
   AbortedError,
   TurnError,
   throwIfAborted,
-} from "./errors.ts";
+} from "../util/errors.ts";
 import type { SkillRuntime } from "@ao/skills";
 import type { AgentHooks, TurnSummary } from "./hooks.ts";
-import type { ContextManager } from "./context-manager.ts";
+import type { ContextManager } from "../context/context-manager.ts";
 import type { InputQueue } from "./input-queue.ts";
 import type { TurnContext } from "./turn-context.ts";
 import { captureStepContext } from "./step-context.ts";
-import { ReadWriteGate } from "./tools/gate.ts";
-import type { ToolRouter } from "./tools/router.ts";
-import { ToolOrchestrator } from "./tools/orchestrator.ts";
+import { ReadWriteGate } from "../tools/gate.ts";
+import type { ToolRouter } from "../tools/router.ts";
+import { ToolOrchestrator } from "../tools/orchestrator.ts";
 import { createSandboxManager } from "@ao/sandbox";
-import { ToolCallRuntime } from "./tools/runtime.ts";
+import { ToolCallRuntime } from "../tools/runtime.ts";
 import {
   MAX_REACTIVE_RETRIES,
   type CompactionOutput,
   type ContextCompactor,
-} from "./compaction/index.ts";
-import { injectSkillMentions, prepareTurnSkills } from "./skills.ts";
+} from "../compaction/index.ts";
+import { injectSkillMentions, prepareTurnSkills } from "../skills/skills.ts";
 import {
   defaultWorldStateContributors,
   type WorldStateManager,
-} from "./world-state.ts";
+} from "../context/world-state.ts";
 import { streamWithRetry } from "@ao/api";
 import type {
+  AgentControl,
   ApprovalGate,
   EventSink,
   FunctionCallItem,
@@ -69,6 +70,7 @@ export interface RunTurnDeps {
   approval?: ApprovalGate;
   sandbox?: SandboxManager;
   permissionProfile?: PermissionProfile;
+  agentControl?: AgentControl;
   skills?: { runtime: SkillRuntime };
 }
 
@@ -94,7 +96,11 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
   } = deps;
 
   let activeRequest = initialText;
-  const initialInput = { text: initialText, at: new Date(turn.startedAt).toISOString() };
+  const initialInput = {
+    text: initialText,
+    at: new Date(turn.startedAt).toISOString(),
+    source: "user" as const,
+  };
   const reviewedInitial = hooks?.reviewInput
     ? await hooks.reviewInput(initialInput, turn)
     : initialText;
@@ -152,6 +158,14 @@ export async function runTurn(deps: RunTurnDeps): Promise<TurnResult> {
       signal,
       router,
       gate,
+      agentControl: deps.agentControl,
+      agentCaller: deps.agentControl
+        ? {
+            threadId: turn.threadId,
+            sessionId: turn.sessionId,
+            agentPath: turn.agentPath,
+          }
+        : undefined,
       stepIndex,
     });
     const runtime = new ToolCallRuntime(step, router, orchestrator, emit, hooks);

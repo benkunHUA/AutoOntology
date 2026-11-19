@@ -8,7 +8,7 @@ import type {
   ToolRuntime,
   SandboxManager,
 } from "@ao/protocol";
-import { captureStepContext } from "../src/step-context.ts";
+import { captureStepContext } from "../src/engine/step-context.ts";
 import { ReadWriteGate } from "../src/tools/gate.ts";
 import { ToolOrchestrator } from "../src/tools/orchestrator.ts";
 import { ToolRouter } from "../src/tools/router.ts";
@@ -313,6 +313,7 @@ describe("ToolCallRuntime", () => {
     threadId: "thread_1",
     sessionId: "session_1",
     turnId: "turn_1",
+    agentPath: "/root",
     cwd: "/tmp",
     model: "test",
     instructions: "",

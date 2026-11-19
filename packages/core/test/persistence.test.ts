@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ModelClient, ModelRequest, ResponseEvent, StreamOptions } from "@ao/protocol";
-import { threadPersistencePath } from "../src/persistence.ts";
-import { Session } from "../src/session.ts";
+import { threadPersistencePath } from "../src/persistence/index.ts";
+import { Session } from "../src/engine/session.ts";
 
 function oneShotClient(): ModelClient {
   return {
