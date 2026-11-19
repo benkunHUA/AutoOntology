@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApprovalGate } from "@ao/protocol";
-import { CachingApprovalGate } from "../src/approval-cache.ts";
+import { CachingApprovalGate } from "../src/approval/approval-cache.ts";
 
 function gate(decisions: string[]): ApprovalGate {
   let calls = 0;

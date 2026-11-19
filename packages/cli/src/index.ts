@@ -18,6 +18,7 @@ import {
   type SlashCommandContext,
 } from "@ao/commands";
 import {
+  createSubagentToolHandlers,
   ThreadManager,
   type ThreadOptions,
 } from "@ao/core";
@@ -61,19 +62,20 @@ async function main(): Promise<void> {
   const skills = {
     enabled: config.skills,
   };
+  const threads = new ThreadManager();
   const threadOptions: ThreadOptions = {
     cwd,
     model: useMock ? "mock" : config.modelName,
     instructions: SYSTEM_INSTRUCTIONS,
     client,
-    handlers: defaultTools(),
+    handlers: [...defaultTools(), ...createSubagentToolHandlers()],
     approval,
     skills,
+    agentControl: threads,
     permissionProfile: resolveSandboxProfile(cwd, config),
     emit: (event) => renderer.render(event),
     persistenceDir: resolve(cwd, ".ao", "sessions"),
   };
-  const threads = new ThreadManager();
   threads.createRoot(threadOptions);
   const currentThread = () => threads.current()!;
   const commandDispatcher = new SlashCommandDispatcher(discoverSlashCommands());

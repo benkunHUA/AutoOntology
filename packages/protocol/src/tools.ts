@@ -1,3 +1,5 @@
+import type { AgentCaller, AgentControl } from "./agent.ts";
+
 /**
  * 工具层契约。
  *
@@ -87,6 +89,9 @@ export interface ToolExecutionContext {
   sandboxOverride?: SandboxOverride;
   sandboxType?: SandboxType;
   sandboxPolicy?: PermissionProfile;
+  /** subagent 工具专用；未注入时 subagent 工具返回自纠错误。 */
+  agentControl?: AgentControl;
+  agentCaller?: AgentCaller;
 }
 
 /** Handler 上下文：在 ToolExecutionContext 上附加主动调用编排器的入口。 */

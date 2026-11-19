@@ -10,6 +10,8 @@
  *   → 清空活跃任务 → 有待处理输入则立即开下一单
  */
 import type {
+  AgentControl,
+  AgentPath,
   ApprovalGate,
   EventSink,
   HistoryItem,
@@ -19,18 +21,19 @@ import type {
   SessionEvent,
   ThreadIdentity,
   ToolHandler,
+  WaitAgentResult,
 } from "@ao/protocol";
 import type { SkillRuntime } from "@ao/skills";
-import { newSessionId, newThreadId } from "@ao/protocol";
+import { newId } from "../util/id.ts";
 import { join } from "node:path";
-import { ContextManager } from "./context-manager.ts";
+import { ContextManager } from "../context/context-manager.ts";
 import { InputQueue } from "./input-queue.ts";
 import type { AgentHooks } from "./hooks.ts";
 import {
   SessionStore,
   loadSession,
   threadPersistencePath,
-} from "./persistence.ts";
+} from "../persistence/index.ts";
 import type { TurnContext } from "./turn-context.ts";
 import type { TurnResult } from "./turn.ts";
 import {
@@ -38,18 +41,18 @@ import {
   ToolResultStore,
   TranscriptArchive,
   type CompactionOutput,
-} from "./compaction/index.ts";
-import { AbortedError } from "./errors.ts";
-import type { AbortReason } from "./errors.ts";
-import { RegularTask } from "./tasks/regular.ts";
-import type { SessionTask } from "./tasks/task.ts";
+} from "../compaction/index.ts";
+import { AbortedError } from "../util/errors.ts";
+import type { AbortReason } from "../util/errors.ts";
+import { RegularTask } from "../tasks/regular.ts";
+import type { SessionTask } from "../tasks/task.ts";
 import {
   createSkillRuntime,
   createSkillToolHandlers,
   type SkillsOptions,
-} from "./skills.ts";
-import { ToolRouter } from "./tools/router.ts";
-import { WorldStateManager } from "./world-state.ts";
+} from "../skills/skills.ts";
+import { ToolRouter } from "../tools/router.ts";
+import { WorldStateManager } from "../context/world-state.ts";
 
 export type SubmissionMode =
   | "start-or-steer"
@@ -81,6 +84,10 @@ export interface SessionOptions {
   compactionDir?: string;
   /** 命令执行沙箱的权限基线；缺省由编排器按 cwd 推导。 */
   permissionProfile?: PermissionProfile;
+  /** 共享 agent tree 控制面；注入后 subagent 工具可用。 */
+  agentControl?: AgentControl;
+  /** 本线程在 agent tree 中的路径。 */
+  agentPath?: AgentPath;
 }
 
 interface TurnStats {
@@ -122,11 +129,11 @@ export class Session {
 
   constructor(options: SessionOptions) {
     this.options = options;
-    const threadId = options.identity?.threadId ?? newThreadId();
+    const threadId = options.identity?.threadId ?? newId();
     const { sessionId, rootThreadId, parentThreadId, forkedFromThreadId } = options.identity ?? {};
     this.identity = Object.freeze({
       threadId,
-      sessionId: sessionId ?? newSessionId(),
+      sessionId: sessionId ?? newId(),
       rootThreadId: rootThreadId ?? sessionId ?? threadId,
       parentThreadId,
       forkedFromThreadId,
@@ -165,9 +172,9 @@ export class Session {
   /** 从 canonical 会话文件恢复历史并创建会话。 */
   static async open(options: SessionOptions): Promise<Session> {
     const identity = options.identity ?? {
-      threadId: newThreadId(),
-      sessionId: newSessionId(),
-      rootThreadId: newSessionId(),
+      threadId: newId(),
+      sessionId: newId(),
+      rootThreadId: newId(),
     };
     const store =
       options.persistence ??
@@ -205,6 +212,14 @@ export class Session {
 
   get sessionId(): string {
     return this.identity.sessionId;
+  }
+
+  get agentPath(): AgentPath {
+    return this.options.agentPath ?? "/root";
+  }
+
+  visibleToolNames(): string[] {
+    return this.router.modelVisibleSpecs().map((tool) => tool.name);
   }
 
   /**
@@ -261,6 +276,98 @@ export class Session {
     return { compacted: true };
   }
 
+  /**
+   * 队列型 agent 消息：与用户输入同队列，但不会启动空闲回合。
+   * 忙碌回合会在下一采样步骤消费。
+   */
+  enqueueAgentMessage(text: string, sourcePath: string): void {
+    this.inputQueue.enqueueAgentMessage(text, sourcePath);
+  }
+
+  /**
+   * 等待本线程输入队列出现活动；供 wait_agent 工具使用。
+   * agent 消息按 mailbox 计，用户插话按 steer 计，超时按 timeout 计。
+   */
+  async waitForPendingInput(
+    signal: AbortSignal,
+    timeoutMs: number,
+    expectedSourcePath: string,
+  ): Promise<WaitAgentResult> {
+    if (signal.aborted) {
+      throw signal.reason ?? new Error("aborted");
+    }
+    const queue = this.inputQueue;
+    const waitStartIndex = queue.size;
+    if (queue.findUserInput(waitStartIndex)) {
+      return { message: "Wait completed.", timedOut: false, activity: "steer" };
+    }
+    const waitingAgent = queue.findAgentMessage(
+      expectedSourcePath,
+      waitStartIndex,
+    );
+    if (waitingAgent) {
+      return {
+        message: "Wait completed.",
+        timedOut: false,
+        activity: "mailbox",
+        sourcePath: waitingAgent.sourcePath,
+      };
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    return new Promise<WaitAgentResult>((resolve, reject) => {
+      const unsubscribe = queue.subscribe(onActivity);
+      const timeout = setTimeout(
+        () => {
+          cleanup();
+          resolve({ message: "Wait timed out.", timedOut: true, activity: "timeout" });
+        },
+        timeoutMs,
+      );
+      const onAbort = () => {
+        cleanup();
+        reject(signal.reason ?? new Error("aborted"));
+      };
+
+      const cleanup = () => {
+        unsubscribe();
+        clearTimeout(timeout);
+        signal.removeEventListener("abort", onAbort);
+      };
+
+      function onActivity(): void {
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        if (Date.now() >= deadline) {
+          cleanup();
+          resolve({ message: "Wait timed out.", timedOut: true, activity: "timeout" });
+          return;
+        }
+        if (queue.findUserInput(waitStartIndex)) {
+          cleanup();
+          resolve({ message: "Wait completed.", timedOut: false, activity: "steer" });
+        } else {
+          const agent = queue.findAgentMessage(
+            expectedSourcePath,
+            waitStartIndex,
+          );
+          if (!agent) return;
+          cleanup();
+          resolve({
+            message: "Wait completed.",
+            timedOut: false,
+            activity: "mailbox",
+            sourcePath: agent.sourcePath,
+          });
+        }
+      }
+
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
   private persistCompaction(
     output: CompactionOutput,
     before: readonly HistoryItem[],
@@ -308,6 +415,7 @@ export class Session {
       threadId: this.identity.threadId,
       sessionId: this.identity.sessionId,
       turnId,
+      agentPath: this.agentPath,
       cwd: this.options.cwd,
       model: this.options.model,
       instructions: this.options.instructions,
@@ -347,6 +455,7 @@ export class Session {
         emit: (event) => this.emitForTurn(event, active),
         hooks: this.options.hooks,
         signal: active.controller.signal,
+        agentControl: this.options.agentControl,
         worldState: this.worldState,
         compactor: this.compactor,
         persistCompaction: (output, before) =>

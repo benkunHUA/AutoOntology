@@ -9,7 +9,7 @@ import type {
   ResponseEvent,
   StreamOptions,
 } from "@ao/protocol";
-import { Session } from "../src/session.ts";
+import { Session } from "../src/engine/session.ts";
 
 function captureClient(captured: {
   input?: HistoryItem[];

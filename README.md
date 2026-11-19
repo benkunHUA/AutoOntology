@@ -46,6 +46,23 @@ Skill 是可发现、按需加载的指令包：系统扫描目录中的 `SKILL.
 - `SKILL.md` 需要 YAML frontmatter（`name`、`description`，可选 `short-description`）。
 - 产品过滤默认 `codex`；在 `ao.config.json` 中设置 `"skills": false` 可关闭技能注入。
 
+## Subagent
+
+引擎支持多 agent 协作：`ThreadManager` 维护一棵以 `/root` 为根的 agent tree，
+每个子 agent 是一个拥有独立历史、回合和状态的 `Thread`，与根线程共享 `sessionId`。
+模型可通过以下工具管理子 agent：
+
+- `spawn_agent`：创建子 agent 并立即提交首个任务。
+- `send_message`：队列投递消息，不唤醒空闲 agent。
+- `followup_task`：唤醒已有子 agent 并继续工作。
+- `list_agents`：按路径前缀列出 agent 与状态。
+- `interrupt_agent`：中断指定子 agent 的当前回合。
+- `wait_agent`：等待 agent 消息、用户插话或超时。
+
+子 agent 完成后会把结果以队列型消息回传给父 agent。核心契约在
+`packages/protocol/src/agent.ts`，引擎实现在 `packages/core/src/thread-manager.ts`，
+工具 handler 在 `packages/core/src/subagent/tools/`。
+
 ## 工程结构
 
 ```

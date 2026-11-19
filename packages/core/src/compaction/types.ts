@@ -1,5 +1,5 @@
 import type { HistoryItem } from "@ao/protocol";
-import type { ToolOutputRewriteReason } from "../session-store.ts";
+import type { ToolOutputRewriteReason } from "../persistence/session-store.ts";
 
 /**
  * 压缩管线阈值。数值与 demo/compaction 保持一致，机器解析用的 marker

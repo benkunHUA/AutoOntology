@@ -6,6 +6,7 @@ export interface TurnContext {
   readonly threadId: string;
   readonly sessionId: string;
   readonly turnId: string;
+  readonly agentPath: string;
   readonly cwd: string;
   readonly model: string;
   readonly instructions: string;

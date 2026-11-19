@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ContextManager } from "../src/context-manager.ts";
+import { ContextManager } from "../src/context/context-manager.ts";
 import {
   WorldStateManager,
   type WorldStateCaptureContext,
   type WorldStateContributor,
-} from "../src/world-state.ts";
+} from "../src/context/world-state.ts";
 
 class FakeContributor implements WorldStateContributor {
   readonly id = "fake";

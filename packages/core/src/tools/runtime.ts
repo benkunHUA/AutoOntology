@@ -9,8 +9,8 @@
 import { ToolError } from "@ao/protocol";
 import type { FunctionCallItem, ToolResult } from "@ao/protocol";
 import type { EventSink } from "@ao/protocol";
-import type { AgentHooks } from "../hooks.ts";
-import type { StepContext } from "../step-context.ts";
+import type { AgentHooks } from "../engine/hooks.ts";
+import type { StepContext } from "../engine/step-context.ts";
 import { isTimeout, type ToolOrchestrator } from "./orchestrator.ts";
 import type { ResolvedToolCall, ToolRouter } from "./router.ts";
 
@@ -166,6 +166,8 @@ export class ToolCallRuntime {
           toolName: resolved.call.name,
           callId: resolved.call.callId,
           orchestrator: this.orchestrator,
+          agentControl: this.step.agentControl,
+          agentCaller: this.step.agentCaller,
         });
         return { result, aborted: false };
       } catch (error) {

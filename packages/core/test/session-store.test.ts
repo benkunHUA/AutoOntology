@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { HistoryItem } from "@ao/protocol";
-import { SessionStore, loadSession } from "../src/session-store.ts";
-import { Session } from "../src/session.ts";
+import { SessionStore, loadSession } from "../src/persistence/session-store.ts";
+import { Session } from "../src/engine/session.ts";
 
 describe("SessionStore", () => {
   it("恢复 rewrite 与 range_archive", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ModelClient, ModelRequest, ResponseEvent, StreamOptions } from "@ao/protocol";
-import { Thread } from "../src/thread.ts";
+import { Thread } from "../src/engine/thread.ts";
 
 function summaryClient(summary: string): ModelClient {
   return {
