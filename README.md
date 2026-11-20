@@ -1,6 +1,6 @@
 # AutoOntology
 
-Node.js 编程智能体 —— 核心 agent loop 的 TypeScript 实现，CLI 优先。
+Node.js 编程智能体 —— 核心 agent loop 的 TypeScript 实现，提供 CLI 与桌面客户端。
 
 设计来源：`docs/agent-loop-outline-design.md`、`docs/agent-loop-detail-design.md`；
 架构与选型决策：`docs/architecture-and-selection.md`。
@@ -35,6 +35,22 @@ pnpm cli
 REPL 操作：直接输入即提交；回合进行中输入会自动「插话」；
 `/abort` 中断当前回合；`/new` 新建会话；`/compact` 压缩上下文；`/quit` 退出。
 会话历史以 JSONL 追加写入 `.ao/sessions/`。
+
+## 桌面客户端（Desktop）
+
+三栏 Electron 客户端：左侧项目列表、中间会话区、右侧文件树，文件预览使用
+Monaco Editor；左右面板均可收起。
+
+```bash
+pnpm --filter @ao/desktop dev
+```
+
+启动后通过左侧「打开项目」选择工作目录；项目存在 `ao.config.json` 时走真实模型，
+否则自动使用 mock。生产构建：
+
+```bash
+pnpm --filter @ao/desktop build
+```
 
 ## 技能（Skills）
 
@@ -72,7 +88,8 @@ packages/
 ├── core/       引擎层：提交循环、回合、工具调度、持久化、扩展钩子
 ├── commands/   命令层：斜杠命令声明 / 发现 / 分发 / 执行（零依赖）
 ├── tools/      工具层：exec_command / read_file / write_file / list_dir
-└── cli/        客户端：REPL + 事件渲染
+├── cli/        客户端：REPL + 事件渲染
+└── desktop/    桌面客户端：Electron + React + Monaco Editor
 ```
 
 依赖方向严格单向：`cli → core → api → protocol`，`cli → commands`；
@@ -85,4 +102,4 @@ pnpm typecheck   # tsc --noEmit
 pnpm test        # vitest
 ```
 
-无运行时第三方依赖；devDeps 仅 typescript / tsx / vitest / @types/node。
+核心包无运行时第三方依赖；desktop 依赖 Electron、React、Monaco Editor 等。
